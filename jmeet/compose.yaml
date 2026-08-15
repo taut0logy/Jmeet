@@ -1,0 +1,26 @@
+services:
+  postgres:
+    image: 'postgres:17-alpine'
+    environment:
+      - 'POSTGRES_DB=jmeet'
+      - 'POSTGRES_PASSWORD=secret'
+      - 'POSTGRES_USER=jmeet'
+    ports:
+      - '5432'
+    volumes:
+      - ../data/dev/postgres:/var/lib/postgresql/data
+  redis:
+    image: 'redis:7-alpine'
+    ports:
+      - '6379'
+    volumes:
+      - ../data/dev/redis:/data
+  mailpit:
+    image: axllent/mailpit:latest
+    environment:
+      - 'MP_DATABASE=/data/mailpit.db'
+    ports:
+      - '1025:1025'
+      - '8025:8025'
+    volumes:
+      - ../data/dev/mailpit:/data
