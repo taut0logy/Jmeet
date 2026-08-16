@@ -11,6 +11,9 @@ import com.taut0logy.jmeet.TestcontainersConfiguration;
 import com.taut0logy.jmeet.auth.LoginRequest;
 import com.taut0logy.jmeet.auth.RegisterRequest;
 import com.taut0logy.jmeet.auth.TokenRequest;
+import com.taut0logy.jmeet.meeting.session.MeetingSession;
+import com.taut0logy.jmeet.meeting.session.MeetingSessionRepository;
+import com.taut0logy.jmeet.outbox.OutboxRelay;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -26,9 +29,11 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.testcontainers.containers.BindMode;
 import org.testcontainers.containers.GenericContainer;
@@ -70,6 +75,18 @@ class RoomIntegrationTest {
 
     @LocalServerPort
     private int port;
+
+    @Autowired
+    private MeetingDurationScheduler durationScheduler;
+
+    @Autowired
+    private MeetingSessionRepository sessions;
+
+    @Autowired
+    private StringRedisTemplate redis;
+
+    @Autowired
+    private OutboxRelay outboxRelay;
 
     private final HttpClient http = HttpClient.newHttpClient();
     private final ObjectMapper json = new ObjectMapper();
@@ -268,6 +285,50 @@ class RoomIntegrationTest {
         HttpResponse<String> sync = get(new Client(), "/rooms/" + sessionId + "/sync?peerId=" + peerId);
         assertThat(sync.statusCode()).isEqualTo(403);
         assertThat(sync.body()).contains("NOT_ADMITTED");
+    }
+
+    private String createScheduledMeeting(Client owner, String title, java.time.Instant startsAt, int durationMin) throws Exception {
+        HttpResponse<String> create = post(owner, "/meetings", Map.of(
+                "title", title, "kind", "SCHEDULED", "startsAt", startsAt.toString(),
+                "durationMin", durationMin, "waitingRoom", "OFF"));
+        return (String) json.readValue(create.body(), Map.class).get("code");
+    }
+
+    @Test
+    void durationSchedulerAutoEndsASessionPastItsGracePeriod() throws Exception {
+        Client owner = registerAndLogin("duration-end-" + System.nanoTime() + "@example.com", "Ada Lovelace");
+        String code = createScheduledMeeting(owner, "Overrun Sync", java.time.Instant.now().minusSeconds(1200), 1);
+        Client guest = new Client();
+        String joinToken = mintGuestJoinToken(guest, code, "Late Guest");
+        HttpResponse<String> join = post(guest, "/rooms/" + code + "/join", new RoomJoinRequest(joinToken));
+        String sessionId = (String) ((Map<String, Object>) json.readValue(join.body(), Map.class).get("snapshot")).get("sessionId");
+
+        durationScheduler.scan();
+        outboxRelay.poll();
+
+        var deadline = System.currentTimeMillis() + 10000;
+        MeetingSession reloaded;
+        do {
+            reloaded = sessions.findById(sessionId).orElseThrow();
+            if (reloaded.getEndedAt() != null) break;
+            Thread.sleep(200);
+        } while (System.currentTimeMillis() < deadline);
+
+        assertThat(reloaded.getEndedAt()).as("session should have been auto-ended past its grace period").isNotNull();
+    }
+
+    @Test
+    void durationSchedulerClaimsAWarningOnceForASessionNearingItsEnd() throws Exception {
+        Client owner = registerAndLogin("duration-warn-" + System.nanoTime() + "@example.com", "Grace Hopper");
+        String code = createScheduledMeeting(owner, "Almost Done Sync", java.time.Instant.now().minusSeconds(180), 5);
+        Client guest = new Client();
+        String joinToken = mintGuestJoinToken(guest, code, "Warned Guest");
+        HttpResponse<String> join = post(guest, "/rooms/" + code + "/join", new RoomJoinRequest(joinToken));
+        String sessionId = (String) ((Map<String, Object>) json.readValue(join.body(), Map.class).get("snapshot")).get("sessionId");
+
+        durationScheduler.scan();
+
+        assertThat(redis.hasKey("duration-warning:sent:" + sessionId)).isTrue();
     }
 
     private String signWebhook(String body) throws Exception {

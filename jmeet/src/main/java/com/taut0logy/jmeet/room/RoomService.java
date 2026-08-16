@@ -246,14 +246,37 @@ public class RoomService {
         MeetingSession session = requireSession(sessionId);
         Meeting meeting = requireMeeting(session);
         meetingService.requireHostOrCohost(userId, meeting.getId());
+        endSession(session, meeting);
+    }
 
-        media.deleteRoom(meeting.getCode());
-        participations.findBySessionIdAndLeftAtIsNull(sessionId).forEach(Participation::leave);
-        recordingService.stopActiveForSession(sessionId);
+    /** §9.4's scheduled auto-end: a system action, not a user one — no platform-role check,
+     * only a scheduler deciding a meeting has run past its time. */
+    @Transactional
+    public void autoEndSession(String sessionId) {
+        MeetingSession session = sessions.findById(sessionId).orElse(null);
+        if (session == null || !session.isLive()) return;
+        Meeting meeting = requireMeeting(session);
+        endSession(session, meeting);
+    }
+
+    private void endSession(MeetingSession session, Meeting meeting) {
+        try {
+            media.deleteRoom(meeting.getCode());
+        } catch (RuntimeException e) {
+            log.warn("failed to delete LiveKit room {}: {}", meeting.getCode(), e.getMessage());
+        }
+        participations.findBySessionIdAndLeftAtIsNull(session.getId()).forEach(Participation::leave);
+        recordingService.stopActiveForSession(session.getId());
         session.end();
 
+        long rev = bumpRev(session.getId());
+        broadcast(roomTopic(session.getId()), new RoomBroadcast("room-ended", rev, Map.of()));
+    }
+
+    /** §9.4's duration warning, pushed before the scheduled end. */
+    public void broadcastDurationWarning(String sessionId) {
         long rev = bumpRev(sessionId);
-        broadcast(roomTopic(sessionId), new RoomBroadcast("room-ended", rev, Map.of()));
+        broadcast(roomTopic(sessionId), new RoomBroadcast("duration-warning", rev, Map.of()));
     }
 
     @Transactional

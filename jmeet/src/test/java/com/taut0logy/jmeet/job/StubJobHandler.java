@@ -6,8 +6,13 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.springframework.boot.test.context.TestComponent;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 
+/** Ordered last so it wins JobListener's last-registered-wins merge when a real handler for the
+ * same JobType is also on the classpath (see JobListener). */
 @TestComponent
+@Order(Ordered.LOWEST_PRECEDENCE)
 public class StubJobHandler implements JobHandler {
 
     private final Map<String, AtomicInteger> failuresRemaining = new ConcurrentHashMap<>();

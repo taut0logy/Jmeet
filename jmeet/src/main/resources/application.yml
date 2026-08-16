@@ -106,6 +106,9 @@ app:
     single-meeting-enabled: ${MEETING_SINGLE_MEETING_ENABLED:true}
     screen-share-max-concurrent: ${MEETING_SCREEN_SHARE_MAX_CONCURRENT:2}
     chat-snapshot-limit: ${MEETING_CHAT_SNAPSHOT_LIMIT:50}
+    reminder-lead-time: ${MEETING_REMINDER_LEAD_TIME:15m}
+    duration-warning: ${MEETING_DURATION_WARNING:5m}
+    auto-end-grace: ${MEETING_AUTO_END_GRACE:5m}
   realtime:
     stomp-relay-port: ${STOMP_RELAY_PORT:61613}
   recording:

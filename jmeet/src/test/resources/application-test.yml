@@ -39,6 +39,9 @@ app:
     single-meeting-enabled: true
     screen-share-max-concurrent: 2
     chat-snapshot-limit: 50
+    reminder-lead-time: 15m
+    duration-warning: 5m
+    auto-end-grace: 5m
   realtime:
     stomp-relay-port: 61613
   recording:

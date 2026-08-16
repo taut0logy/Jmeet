@@ -29,17 +29,21 @@ public class RecordingReconciler {
 
     @Scheduled(fixedDelay = 60_000)
     @SchedulerLock(name = "recording-reconciler", lockAtMostFor = "5m")
-    @Transactional
     public void reconcile() {
         Instant staleThreshold = Instant.now().minus(STALE_AFTER);
         for (Recording recording : recordings.findByStatusInAndStartedAtBefore(ACTIVE_STATUSES, staleThreshold)) {
-            reconcileOne(recording);
+            reconcileOne(recording.getId());
         }
         recordings.findByStatusIn(List.of(RecordingStatus.RECORDING)).forEach(recordingService::stopIfOverMaxDuration);
     }
 
-    private void reconcileOne(Recording recording) {
-        if (recording.getEgressId() == null) return;
+    /** Looks the recording up fresh rather than trusting a caller-passed entity — those can be
+     * detached by the time they get here (loaded in an earlier, already-closed transaction),
+     * and a detached entity's mutations never reach the database. */
+    @Transactional
+    void reconcileOne(String recordingId) {
+        Recording recording = recordings.findById(recordingId).orElse(null);
+        if (recording == null || recording.getEgressId() == null) return;
         Optional<EgressStatusSnapshot> snapshot = egress.getEgress(recording.getEgressId());
         if (snapshot.isPresent()) {
             recordingService.applyEgressStatus(recording.getEgressId(), snapshot.get());

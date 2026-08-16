@@ -11,4 +11,6 @@ public interface MeetingRepository extends JpaRepository<Meeting, String> {
     boolean existsByCode(String code);
 
     List<Meeting> findByOwnerId(String ownerId);
+
+    List<Meeting> findByKindAndStatus(MeetingKind kind, MeetingStatus status);
 }

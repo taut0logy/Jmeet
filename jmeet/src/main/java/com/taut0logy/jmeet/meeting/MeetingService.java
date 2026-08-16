@@ -221,6 +221,11 @@ public class MeetingService {
         return getEditable(userId, meetingId);
     }
 
+    public List<OccurrenceView> occurrencesInRange(Meeting meeting, Instant from, Instant to) {
+        return RecurrenceExpander.expand(toSeriesDef(meeting), occurrences.findByMeetingId(meeting.getId()),
+                overrides.findByMeetingIdOrderByFromStartsAt(meeting.getId()), from, to);
+    }
+
     public Meeting requireMember(String userId, String meetingId) {
         return getViewable(userId, meetingId);
     }

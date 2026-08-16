@@ -102,6 +102,9 @@ class RecordingIntegrationTest {
     @Autowired
     private RecordingRepository recordings;
 
+    @Autowired
+    private RecordingReconciler reconciler;
+
     private final HttpClient http = HttpClient.newHttpClient();
     private final ObjectMapper json = new ObjectMapper();
 
@@ -311,5 +314,27 @@ class RecordingIntegrationTest {
         Recording reloaded = recordings.findById(recordingId).orElseThrow();
         assertThat(reloaded.getStatus()).isEqualTo(RecordingStatus.FAILED);
         assertThat(reloaded.getError()).isEqualTo("network drop");
+    }
+
+    @Test
+    void reconcilerMarksUnknownEgressAsFailed() throws Exception {
+        Client owner = registerAndLogin("rec-reconcile-" + System.nanoTime() + "@example.com", "Barbara Liskov");
+        String sessionId = createMeetingAndSession(owner, "Reconcile Sync");
+
+        HttpResponse<String> start = post(owner, "/rooms/" + sessionId + "/recording", null);
+        String recordingId = (String) json.readValue(start.body(), Map.class).get("id");
+        Recording recording = recordings.findById(recordingId).orElseThrow();
+
+        // The fake port only knows about egress ids it minted itself; reconcileOne's job is to
+        // treat "the SFU has no record of this" the same whether that's because it genuinely
+        // vanished or, as here, was never real to begin with.
+        recording.setEgressId("egress-id-unknown-to-livekit");
+        recordings.save(recording);
+
+        reconciler.reconcileOne(recordingId);
+
+        Recording reloaded = recordings.findById(recordingId).orElseThrow();
+        assertThat(reloaded.getStatus()).isEqualTo(RecordingStatus.FAILED);
+        assertThat(reloaded.getError()).isEqualTo("egress not found during reconciliation");
     }
 }

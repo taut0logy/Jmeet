@@ -25,8 +25,10 @@ public class JobListener {
 
     public JobListener(List<JobHandler> handlerList, JobRecordRepository jobRecords,
             RabbitTemplate rabbitTemplate, JobsProperties properties) {
+        // Last-registered wins for a given type, so a test can substitute a handler by
+        // importing a bean ordered after the real one (@Order is honored for List<T> injection).
         this.handlers = handlerList.stream()
-                .collect(Collectors.toMap(h -> h.type().key(), Function.identity()));
+                .collect(Collectors.toMap(h -> h.type().key(), Function.identity(), (first, second) -> second));
         this.jobRecords = jobRecords;
         this.rabbitTemplate = rabbitTemplate;
         this.properties = properties;
