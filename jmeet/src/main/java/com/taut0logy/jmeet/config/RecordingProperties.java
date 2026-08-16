@@ -10,5 +10,9 @@ import org.springframework.validation.annotation.Validated;
 @ConfigurationProperties("app.recording")
 public record RecordingProperties(@NotBlank String bucket, @NotBlank String region, @NotBlank String endpoint,
         boolean pathStyle, String accessKey, String secretKey, @NotBlank String layoutUrl,
-        @NotNull Duration maxDuration) {
+        @NotNull Duration maxDuration, String egressEndpoint) {
+
+    public String egressEndpointOrDefault() {
+        return (egressEndpoint == null || egressEndpoint.isBlank()) ? endpoint : egressEndpoint;
+    }
 }

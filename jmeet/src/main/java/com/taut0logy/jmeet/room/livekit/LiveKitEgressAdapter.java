@@ -36,7 +36,8 @@ class LiveKitEgressAdapter implements EgressPort {
                 .setBucket(properties.bucket())
                 .setRegion(properties.region())
                 .setForcePathStyle(properties.pathStyle());
-        if (properties.endpoint() != null && !properties.endpoint().isBlank()) s3.setEndpoint(properties.endpoint());
+        String egressEndpoint = properties.egressEndpointOrDefault();
+        if (egressEndpoint != null && !egressEndpoint.isBlank()) s3.setEndpoint(egressEndpoint);
         if (properties.accessKey() != null && !properties.accessKey().isBlank()) s3.setAccessKey(properties.accessKey());
         if (properties.secretKey() != null && !properties.secretKey().isBlank()) s3.setSecret(properties.secretKey());
 

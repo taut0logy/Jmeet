@@ -1,14 +1,65 @@
 'use client';
 
-import { Suspense, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
-import { FiMail, FiLoader, FiCheck } from 'react-icons/fi';
+import { Suspense, useEffect, useState } from 'react';
+import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { FiMail, FiLoader, FiCheck, FiAlertTriangle } from 'react-icons/fi';
 import { authClient } from '@/lib/auth/client';
 import { clientUrl } from '@/lib/auth/urls';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
-function VerifyEmailContent() {
+function TokenVerification({ token }: { token: string }) {
+  const router = useRouter();
+  const [state, setState] = useState<'verifying' | 'done' | 'error'>('verifying');
+
+  useEffect(() => {
+    let cancelled = false;
+    authClient.$fetch('/auth/verify-email', { body: { token } }).then(({ error }) => {
+      if (cancelled) return;
+      setState(error ? 'error' : 'done');
+      if (!error) setTimeout(() => router.push('/sign-in'), 1800);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, router]);
+
+  return (
+    <Card>
+      <CardHeader className="items-center text-center">
+        <div
+          className={`mb-2 flex size-12 items-center justify-center rounded-full ${state === 'error' ? 'bg-destructive/10' : 'bg-primary/10'}`}
+        >
+          {state === 'verifying' ? (
+            <FiLoader className="size-6 animate-spin text-primary" />
+          ) : state === 'done' ? (
+            <FiCheck className="size-6 text-primary" />
+          ) : (
+            <FiAlertTriangle className="size-6 text-destructive" />
+          )}
+        </div>
+        <CardTitle className="text-xl">
+          {state === 'verifying' ? 'Verifying your email…' : state === 'done' ? 'Email verified' : 'Link expired'}
+        </CardTitle>
+        <CardDescription>
+          {state === 'verifying' && 'Just a moment.'}
+          {state === 'done' && 'Redirecting you to sign in…'}
+          {state === 'error' && 'This verification link is invalid or has expired.'}
+        </CardDescription>
+      </CardHeader>
+      {state === 'error' ? (
+        <CardContent className="flex justify-center">
+          <Button variant="outline" render={<Link href="/verify-email" />}>
+            Request a new link
+          </Button>
+        </CardContent>
+      ) : null}
+    </Card>
+  );
+}
+
+function ResendVerification() {
   const params = useSearchParams();
   const email = params.get('email') ?? '';
   const [sent, setSent] = useState(false);
@@ -49,6 +100,12 @@ function VerifyEmailContent() {
       </CardContent>
     </Card>
   );
+}
+
+function VerifyEmailContent() {
+  const params = useSearchParams();
+  const token = params.get('token');
+  return token ? <TokenVerification token={token} /> : <ResendVerification />;
 }
 
 export default function VerifyEmailPage() {

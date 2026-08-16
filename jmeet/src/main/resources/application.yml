@@ -112,12 +112,13 @@ app:
   realtime:
     stomp-relay-port: ${STOMP_RELAY_PORT:61613}
   recording:
-    bucket: ${RECORDING_S3_BUCKET:jmeet-recordings}
-    region: ${RECORDING_S3_REGION:us-east-1}
-    endpoint: ${RECORDING_S3_ENDPOINT:http://localhost:9000}
-    path-style: ${RECORDING_S3_PATH_STYLE:true}
-    access-key: ${RECORDING_S3_ACCESS_KEY:}
-    secret-key: ${RECORDING_S3_SECRET_KEY:}
+    bucket: ${S3_BUCKET:jmeet-recordings}
+    region: ${S3_REGION:us-east-1}
+    endpoint: ${S3_ENDPOINT:http://localhost:9000}
+    egress-endpoint: ${S3_EGRESS_ENDPOINT:}
+    path-style: ${S3_PATH_STYLE:true}
+    access-key: ${S3_ACCESS_KEY:}
+    secret-key: ${S3_SECRET_KEY:}
     layout-url: ${RECORDING_LAYOUT_URL:https://meet.example.com/egress}
     max-duration: ${RECORDING_MAX_DURATION:2h}
 
@@ -157,7 +158,25 @@ server:
       cookie:
         secure: false
 
+app:
+  client:
+    base-url: ${CLIENT_BASE_URL:http://localhost:3000}
+  join-token:
+    secret: ${JOIN_TOKEN_SECRET:local-dev-join-token-secret-at-least-32-bytes}
+  livekit:
+    api-secret: ${LIVEKIT_API_SECRET:devsecretdevsecretdevsecretdevsecret}
+  recording:
+    access-key: ${S3_ACCESS_KEY:jmeet}
+    secret-key: ${S3_SECRET_KEY:jmeetsecret}
+    bucket: ${S3_BUCKET:jmeet-recordings}
+    endpoint: ${S3_ENDPOINT:http://localhost:9010}
+    egress-endpoint: ${S3_EGRESS_ENDPOINT:http://minio:9000}
+    layout-url: ${RECORDING_LAYOUT_URL:http://host.docker.internal:3000/egress}
+
 logging:
+  structured:
+    format:
+      console: ""
   level:
     com.taut0logy: DEBUG
     org.springframework.jdbc.core: DEBUG

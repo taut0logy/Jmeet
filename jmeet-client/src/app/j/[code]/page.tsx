@@ -9,6 +9,7 @@ import { useLocalPreview } from '@/hooks/use-local-preview';
 import { useMediaDevices } from '@/hooks/use-media-devices';
 import { loadDevicePrefs, saveDevicePrefs } from '@/lib/media/devicePrefs';
 import { VideoPreview } from '@/components/lobby/video-preview';
+import { Logo } from '@/components/brand/logo';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { api, ApiError } from '@/lib/api/client';
 import { Button } from '@/components/ui/button';
@@ -113,7 +114,10 @@ export default function LobbyPage() {
   return (
     <div className="flex min-h-screen flex-col bg-muted/30">
       <header className="flex items-center justify-between px-6 py-4">
-        <span className="text-lg font-semibold tracking-tight">Meet</span>
+        <span className="flex items-center gap-2 text-lg font-semibold tracking-tight">
+          <Logo size={28} />
+          jmeet
+        </span>
         <ThemeToggle />
       </header>
       <main className="flex flex-1 items-center justify-center px-4 pb-16">
@@ -131,7 +135,7 @@ export default function LobbyPage() {
           <div className="flex flex-col justify-center gap-4">
             <div>
               <h1 className="text-xl font-semibold">{preview.title}</h1>
-              <p className="text-sm text-muted-foreground">Hosted by {preview.hostDisplayName}</p>
+              <p className="text-sm text-muted-foreground">Hosted by {preview.hostDisplayName || 'You'}</p>
             </div>
 
             {preview.status === 'CANCELLED' || preview.status === 'ENDED' ? (

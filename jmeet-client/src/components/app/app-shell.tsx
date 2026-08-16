@@ -1,10 +1,11 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { FiLoader, FiLogOut, FiSettings, FiVideo } from 'react-icons/fi';
-import { authClient, signOut, type Session } from '@/lib/auth/client';
+import { FiLoader, FiLogOut, FiSettings } from 'react-icons/fi';
+import { useSession, signOut } from '@/lib/auth/client';
+import { Logo } from '@/components/brand/logo';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -27,29 +28,16 @@ function initialsFor(name?: string | null) {
 }
 
 export function AppShell({ children }: { children: React.ReactNode }) {
-  const [session, setSession] = useState<Session | null | undefined>(undefined);
+  const { data: session, isPending } = useSession();
   const router = useRouter();
 
   useEffect(() => {
-    let cancelled = false;
-    authClient
-      .getSession()
-      .then(({ data }) => {
-        if (!cancelled) setSession(data ?? null);
-      })
-      .catch(() => {
-        if (!cancelled) setSession(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    if (isPending) return;
+    if (!session) router.replace('/sign-in');
+    else if (session.user.hasPassword === false) router.replace('/set-password');
+  }, [isPending, session, router]);
 
-  useEffect(() => {
-    if (session === null) router.replace('/sign-in');
-  }, [session, router]);
-
-  if (session === undefined || session === null) {
+  if (isPending || !session || session.user.hasPassword === false) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <FiLoader className="size-6 animate-spin text-muted-foreground" />
@@ -59,10 +47,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <header className="flex items-center justify-between border-b px-6 py-3">
+      <header className="sticky top-0 z-50 flex items-center justify-between border-b border-border/60 bg-background/85 px-6 py-3 backdrop-blur-md supports-backdrop-filter:bg-background/70">
         <Link href="/dashboard" className="flex items-center gap-2 text-lg font-semibold tracking-tight">
-          <FiVideo className="size-5 text-primary" />
-          Meet
+          <Logo size={26} />
+          jmeet
         </Link>
         <div className="flex items-center gap-2">
           <ThemeToggle />
@@ -71,7 +59,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               aria-label="Account menu"
               render={<Button variant="ghost" className="h-9 gap-2 rounded-full p-1" />}
             >
-              <Avatar className="size-7">
+              <Avatar className="size-7 ring-1 ring-border">
                 <AvatarImage src={session.user.image ?? undefined} alt={session.user.name} />
                 <AvatarFallback>{initialsFor(session.user.name)}</AvatarFallback>
               </Avatar>
@@ -99,7 +87,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </DropdownMenu>
         </div>
       </header>
-      <main className="flex-1 px-6 py-8">
+      <main className="flex-1 px-6 py-10">
         <div className="mx-auto max-w-4xl">{children}</div>
       </main>
     </div>

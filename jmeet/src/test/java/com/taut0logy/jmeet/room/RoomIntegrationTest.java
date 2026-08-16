@@ -292,7 +292,7 @@ class RoomIntegrationTest {
         HttpResponse<String> bootstrapJoin = post(bootstrap, "/rooms/" + code + "/join", new RoomJoinRequest(bootstrapToken));
         String sessionId = (String) ((Map<String, Object>) json.readValue(bootstrapJoin.body(), Map.class).get("snapshot")).get("sessionId");
 
-        HttpResponse<String> lock = post(owner, "/rooms/" + sessionId + "/flags", new RoomFlagsRequest(true, null, null));
+        HttpResponse<String> lock = post(owner, "/rooms/" + sessionId + "/flags", new RoomFlagsRequest(true, null, null, null));
         assertThat(lock.statusCode()).isEqualTo(200);
 
         HttpResponse<String> lateJoin = post(guest, "/rooms/" + code + "/join", new RoomJoinRequest(joinToken));

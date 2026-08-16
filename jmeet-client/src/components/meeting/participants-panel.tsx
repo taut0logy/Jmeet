@@ -1,7 +1,9 @@
 'use client';
 
+import { useMemo } from 'react';
 import { FiMic, FiMicOff, FiVideo, FiVideoOff, FiMoreVertical, FiUserX } from 'react-icons/fi';
 import { FaHandPaper } from 'react-icons/fa';
+import { useParticipants } from '@livekit/components-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -10,10 +12,10 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
-import type { Peer } from '@/stores/meetingStore';
+import type { PeerMeta } from '@/stores/meetingStore';
 
 type ParticipantsPanelProps = {
-  peers: Record<string, Peer>;
+  peers: Record<string, PeerMeta>;
   selfPeerId?: string;
   selfRole: string;
   onMute: (peerId: string, kind: 'audio' | 'video') => void;
@@ -22,8 +24,6 @@ type ParticipantsPanelProps = {
   onMuteAll: () => void;
 };
 
-// Milestone A2. Host/cohost get a per-participant action menu; everyone else
-// sees a read-only roster.
 export function ParticipantsPanel({
   peers,
   selfPeerId,
@@ -35,7 +35,17 @@ export function ParticipantsPanel({
 }: ParticipantsPanelProps) {
   const isHost = selfRole === 'HOST';
   const isHostOrCohost = isHost || selfRole === 'COHOST';
-  const list = Object.values(peers).sort((a, b) => (a.peerId === selfPeerId ? -1 : b.peerId === selfPeerId ? 1 : 0));
+  const liveParticipants = useParticipants();
+  const list = useMemo(() => {
+    const liveByPeer = new Map(liveParticipants.map((p) => [p.identity, p]));
+    return Object.values(peers)
+      .map((peer) => ({
+        ...peer,
+        micOn: liveByPeer.get(peer.peerId)?.isMicrophoneEnabled ?? false,
+        camOn: liveByPeer.get(peer.peerId)?.isCameraEnabled ?? false,
+      }))
+      .sort((a, b) => (a.peerId === selfPeerId ? -1 : b.peerId === selfPeerId ? 1 : 0));
+  }, [peers, selfPeerId, liveParticipants]);
 
   return (
     <div className="flex h-full flex-col">

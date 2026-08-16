@@ -1,17 +1,10 @@
 'use client';
 
-// TODO(spring-security): replaces `better-auth/react`'s createAuthClient().
-// Better Auth's client SDK is hardwired to Better Auth's own wire protocol
-// (endpoint shapes, session cookie name, response bodies) — it cannot talk
-// to a Spring Security backend at all, so this isn't a rewiring job, it's a
-// different implementation behind the same names every page already calls.
-// Endpoints below match the backend spec §10. Session state is a bare
-// fetch-on-mount hook here; Better Auth's real one was reactive/cached —
-// replace with real client-side session state (context, swr, etc.) as
-// needed, this is just enough to keep every call site resolving.
-
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { api, ApiError } from '@/lib/api/client';
+import { useSessionStore, type Session } from '@/lib/auth/session-store';
+
+export type { Session };
 
 type CallResult<T> =
   | { data: T; error: null }
@@ -28,61 +21,48 @@ async function safeCall<T>(fn: () => Promise<T>): Promise<CallResult<T>> {
   }
 }
 
-export type Session = {
-  user: { name: string; email?: string; image?: string; [key: string]: unknown };
-  [key: string]: unknown;
-};
-
 export function useSession() {
-  const [data, setData] = useState<Session | null>(null);
-  const [isPending, setIsPending] = useState(true);
+  const session = useSessionStore((s) => s.session);
+  const status = useSessionStore((s) => s.status);
+  const refetch = useSessionStore((s) => s.refetch);
 
   useEffect(() => {
-    let cancelled = false;
-    api
-      .get('/users/me')
-      .then((res) => {
-        if (!cancelled) setData(res);
-      })
-      .catch(() => {
-        if (!cancelled) setData(null);
-      })
-      .finally(() => {
-        if (!cancelled) setIsPending(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    if (status === 'idle') refetch();
+  }, [status, refetch]);
 
-  return { data, isPending };
+  return { data: session, isPending: status === 'idle' || status === 'loading', refetch };
 }
 
 export const authClient = {
-  getSession: (): Promise<CallResult<Session>> => safeCall(() => api.get('/users/me')),
+  getSession: async (): Promise<CallResult<Session>> => {
+    await useSessionStore.getState().refetch();
+    const session = useSessionStore.getState().session;
+    return session ? { data: session, error: null } : { data: null, error: { code: 'NO_SESSION', message: 'Not signed in.' } };
+  },
   signIn: {
-    email: ({ email, password }: { email: string; password: string }) =>
-      safeCall(() => api.post('/auth/login', { email, password })),
-    // Spring Security's default OAuth2 login redirect convention
-    // (spring-boot-starter-oauth2-client) — not a Better-Auth-style call,
-    // a real navigation. callbackURL is accepted for call-site compatibility
-    // but unused — Spring Security's own post-login redirect applies.
+    email: async ({ email, password }: { email: string; password: string }) => {
+      const result = await safeCall(() => api.post('/auth/login', { email, password }));
+      if (!result.error) await useSessionStore.getState().refetch();
+      return result;
+    },
     social: ({ provider }: { provider: string; callbackURL?: string }) => {
-      window.location.href = `/oauth2/authorization/${provider}`;
+      const apiOrigin = process.env.NEXT_PUBLIC_API_ORIGIN ?? 'http://localhost:8080';
+      window.location.href = `${apiOrigin}/oauth2/authorization/${provider}`;
     },
   },
   signUp: {
     email: ({ email, password, name }: { email: string; password: string; name: string; callbackURL?: string }) =>
       safeCall(() => api.post('/auth/register', { email, password, name })),
   },
-  signOut: () => safeCall(() => api.post('/auth/logout')),
+  signOut: async () => {
+    const result = await safeCall(() => api.post('/auth/logout'));
+    useSessionStore.getState().setSession(null);
+    return result;
+  },
   resetPassword: ({ newPassword, token }: { newPassword: string; token: string }) =>
     safeCall(() => api.post('/auth/reset-password', { newPassword, token })),
   sendVerificationEmail: ({ email }: { email: string; callbackURL?: string }) =>
     safeCall(() => api.post('/auth/verify-email/resend', { email })),
-  // Generic escape hatch some pages used for one-off calls not otherwise
-  // exposed above (e.g. request-password-reset). Always POSTs — `method` is
-  // accepted for call-site compatibility but unused.
   $fetch: (path: string, options?: { method?: string; body?: unknown }) => safeCall(() => api.post(path, options?.body)),
 };
 

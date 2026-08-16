@@ -11,6 +11,7 @@ import com.taut0logy.jmeet.meeting.MeetingService;
 import com.taut0logy.jmeet.meeting.session.MeetingSession;
 import com.taut0logy.jmeet.meeting.session.MeetingSessionRepository;
 import com.taut0logy.jmeet.outbox.OutboxService;
+import com.taut0logy.jmeet.room.RoomBroadcast;
 import jakarta.annotation.PreDestroy;
 import java.net.URI;
 import java.time.Duration;
@@ -20,6 +21,9 @@ import java.util.Map;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.messaging.MessagingException;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
@@ -49,10 +53,13 @@ public class RecordingService {
     private final OutboxService outbox;
     private final ObjectMapper json;
     private final S3Presigner presigner;
+    private final StringRedisTemplate redis;
+    private final SimpMessagingTemplate messaging;
 
     public RecordingService(RecordingRepository recordings, MeetingSessionRepository sessions,
             MeetingRepository meetings, MeetingService meetingService, EgressPort egress,
-            RecordingProperties properties, OutboxService outbox, ObjectMapper json) {
+            RecordingProperties properties, OutboxService outbox, ObjectMapper json,
+            StringRedisTemplate redis, SimpMessagingTemplate messaging) {
         this.recordings = recordings;
         this.sessions = sessions;
         this.meetings = meetings;
@@ -61,6 +68,8 @@ public class RecordingService {
         this.properties = properties;
         this.outbox = outbox;
         this.json = json;
+        this.redis = redis;
+        this.messaging = messaging;
 
         Region region = Region.of(properties.region());
         S3Configuration serviceConfig = S3Configuration.builder().pathStyleAccessEnabled(properties.pathStyle()).build();
@@ -97,6 +106,7 @@ public class RecordingService {
         recording.setEgressId(egressId);
         recordings.save(recording);
 
+        broadcastRecordingState(sessionId, true, recording.getStartedAt(), userId);
         return RecordingResponse.from(recording, null);
     }
 
@@ -113,6 +123,7 @@ public class RecordingService {
 
         egress.stopEgress(recording.getEgressId());
         recording.markProcessing();
+        broadcastRecordingState(sessionId, false, null, null);
         return RecordingResponse.from(recording, null);
     }
 
@@ -150,8 +161,21 @@ public class RecordingService {
         try {
             if (recording.getEgressId() != null) egress.stopEgress(recording.getEgressId());
             recording.markProcessing();
+            broadcastRecordingState(recording.getSessionId(), false, null, null);
         } catch (Exception e) {
             log.warn("failed to stop egress {} for recording {}: {}", recording.getEgressId(), recording.getId(), e.getMessage());
+        }
+    }
+
+    private void broadcastRecordingState(String sessionId, boolean active, Instant startedAt, String startedBy) {
+        Long rev = redis.opsForValue().increment("room:rev:" + sessionId);
+        RoomBroadcast payload = new RoomBroadcast("recording-state", rev == null ? 1 : rev,
+                Map.of("active", active, "startedAt", startedAt == null ? "" : startedAt.toString(),
+                        "startedBy", startedBy == null ? "" : startedBy));
+        try {
+            messaging.convertAndSend("/topic/room." + sessionId, payload);
+        } catch (MessagingException e) {
+            log.warn("failed to broadcast recording state for {}: {}", sessionId, e.getMessage());
         }
     }
 

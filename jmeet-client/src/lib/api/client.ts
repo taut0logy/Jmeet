@@ -31,7 +31,7 @@ function csrfToken(): string | undefined {
 // to already exist to pass the check — a fresh browser session with no prior
 // GET has nothing to send yet. Bootstrap it once rather than require every
 // page to have made a GET first.
-async function ensureCsrfToken(): Promise<string | undefined> {
+export async function ensureCsrfToken(): Promise<string | undefined> {
   let token = csrfToken();
   if (!token) {
     await fetch('/api/auth/sessions', { method: 'GET' });

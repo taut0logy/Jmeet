@@ -3,7 +3,9 @@
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { FiLoader } from 'react-icons/fi';
+import { RoomContext, RoomAudioRenderer, useLocalParticipant } from '@livekit/components-react';
 import { useMediaDevices } from '@/hooks/use-media-devices';
+import { useRoomConnection } from '@/hooks/use-room-connection';
 import { useMeetingStore } from '@/stores/meetingStore';
 import { VideoGrid } from '@/components/meeting/video-grid';
 import { ControlBar } from '@/components/meeting/control-bar';
@@ -12,54 +14,29 @@ import { ReactionsLayer } from '@/components/meeting/reactions-layer';
 import { UnmutePrompt } from '@/components/meeting/unmute-prompt';
 import { DurationWarningBanner } from '@/components/meeting/duration-warning-banner';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
-// TODO(livekit): useMeetingConnection() used to own the mediasoup Device +
-// socket.io signaling connection and returned this exact action surface.
-// Replace with a hook built on `livekit-client`'s Room (connect/disconnect,
-// setMicrophoneEnabled, setCameraEnabled, setScreenShareEnabled,
-// switchActiveDevice) plus a STOMP client for the durable events (chat,
-// waiting room, roles, flags, recording state) per the backend spec's
-// real-time contract — see §12. Keep the same action names below so this
-// page doesn't need to change shape, only what backs it.
-function useMeetingConnectionStub() {
-  const stub = (name) => (...args) => {
-    console.warn(`[stub] ${name} not implemented`, args);
-    return Promise.resolve();
-  };
-  return {
-    toggleMic: stub('toggleMic'),
-    toggleCamera: stub('toggleCamera'),
-    leave: stub('leave'),
-    admitPeer: stub('admitPeer'),
-    denyPeer: stub('denyPeer'),
-    admitAllWaiting: stub('admitAllWaiting'),
-    sendChat: stub('sendChat'),
-    sendReaction: stub('sendReaction'),
-    toggleHand: stub('toggleHand'),
-    startScreenShare: stub('startScreenShare'),
-    stopScreenShare: stub('stopScreenShare'),
-    muteParticipant: stub('muteParticipant'),
-    muteAllParticipants: stub('muteAllParticipants'),
-    removeParticipant: stub('removeParticipant'),
-    setParticipantRole: stub('setParticipantRole'),
-    endMeetingForAll: stub('endMeetingForAll'),
-    toggleIncomingVideo: stub('toggleIncomingVideo'),
-    startRecording: stub('startRecording'),
-    stopRecording: stub('stopRecording'),
-    switchCamera: stub('switchCamera'),
-    switchMic: stub('switchMic'),
-    switchSpeaker: stub('switchSpeaker'),
-    setRoomFlag: stub('setRoomFlag'),
-  };
+export default function MeetingPage() {
+  const { code } = useParams<{ code: string }>();
+  const connection = useRoomConnection(code);
+
+  return (
+    <RoomContext.Provider value={connection.room}>
+      <MeetingRoom code={code} connection={connection} />
+    </RoomContext.Provider>
+  );
 }
 
-// The meeting room shell: video grid, control bar, side panel (chat /
-// participants / waiting room), reactions, recording indicator, and the
-// last-host-leaving confirmation. None of this JSX is mediasoup-specific —
-// it's the product's room UI, wired to whatever connection hook backs it.
-export default function MeetingPage() {
-  const { code } = useParams();
+function MeetingRoom({ code, connection }: { code: string; connection: ReturnType<typeof useRoomConnection> }) {
   const router = useRouter();
   const {
     toggleMic,
@@ -85,16 +62,18 @@ export default function MeetingPage() {
     switchMic,
     switchSpeaker,
     setRoomFlag,
-  } = useMeetingConnectionStub();
+  } = connection;
   const [recordingBusy, setRecordingBusy] = useState(false);
   const [showLastHostLeaveConfirm, setShowLastHostLeaveConfirm] = useState(false);
+  const [showEndForAllConfirm, setShowEndForAllConfirm] = useState(false);
   const { cameras, microphones, speakers } = useMediaDevices();
   const canSelectSpeaker = typeof window !== 'undefined' && 'setSinkId' in (window.HTMLMediaElement?.prototype ?? {});
+  const { isMicrophoneEnabled, isCameraEnabled, isScreenShareEnabled } = useLocalParticipant();
 
   const connectionState = useMeetingStore((s) => s.connectionState);
   const errorMessage = useMeetingStore((s) => s.errorMessage);
   const meeting = useMeetingStore((s) => s.meeting);
-  const self = useMeetingStore((s) => s.self);
+  const selfPeerId = useMeetingStore((s) => s.selfPeerId);
   const peers = useMeetingStore((s) => s.peers);
   const waiting = useMeetingStore((s) => s.waiting);
   const audioOutputId = useMeetingStore((s) => s.audioOutputId);
@@ -114,15 +93,11 @@ export default function MeetingPage() {
   const recording = useMeetingStore((s) => s.recording);
   const durationWarning = useMeetingStore((s) => s.durationWarning);
 
-  // Mirrors the server's finalizeLeave check: no auto-promotion of a random
-  // participant, so if self is the room's only remaining host/cohost,
-  // leaving ends the meeting for everyone. A peer mid reconnect-grace has
-  // connected:false and doesn't count as "still able to run the meeting".
+  const self = selfPeerId ? peers[selfPeerId] : null;
+
   const isLastHostOrCohost =
     (self?.role === 'HOST' || self?.role === 'COHOST') &&
-    !Object.values(peers).some(
-      (p) => p.peerId !== self?.peerId && (p.role === 'HOST' || p.role === 'COHOST') && p.connected,
-    );
+    !Object.values(peers).some((p) => p.peerId !== selfPeerId && (p.role === 'HOST' || p.role === 'COHOST'));
 
   async function handleLeave() {
     await leave();
@@ -138,17 +113,17 @@ export default function MeetingPage() {
   }
 
   async function handleToggleScreenShare() {
-    if (self?.sharing) await stopScreenShare();
+    if (isScreenShareEnabled) await stopScreenShare();
     else await startScreenShare().catch(() => {});
   }
 
   function handleEndForAll() {
-    if (window.confirm('End the meeting for everyone?')) endMeetingForAll();
+    setShowEndForAllConfirm(true);
   }
 
   async function handleUnmuteFromPrompt() {
     dismissUnmutePrompt();
-    if (!self?.micOn) await toggleMic();
+    if (!isMicrophoneEnabled) await toggleMic();
   }
 
   async function handleToggleRecording() {
@@ -157,9 +132,6 @@ export default function MeetingPage() {
       if (recording?.active) await stopRecording();
       else await startRecording();
     } catch {
-      // Ack rejection (e.g. RECORDING_ALREADY_ACTIVE, INSUFFICIENT_DISK_SPACE)
-      // is surfaced via the button simply not toggling — server-pushed
-      // recording state is the source of truth, not this call's success.
     } finally {
       setRecordingBusy(false);
     }
@@ -206,21 +178,22 @@ export default function MeetingPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-neutral-950 text-white">
-      <header className="flex items-center justify-between px-4 py-3">
-        <div className="flex items-center gap-3">
-          <span className="text-sm font-medium text-neutral-300">{meeting?.title}</span>
+      <RoomAudioRenderer />
+      <header className="flex items-center justify-between gap-3 px-4 py-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="truncate text-sm font-medium text-neutral-300">{meeting?.title}</span>
           {recording?.active ? (
             <span
-              className="flex items-center gap-1.5 rounded-full bg-red-500/90 px-2.5 py-1 text-xs font-medium text-white"
+              className="flex shrink-0 items-center gap-1.5 rounded-full bg-red-500/90 px-2.5 py-1 text-xs font-medium text-white"
               data-testid="recording-indicator"
             >
               <span className="size-2 animate-pulse rounded-full bg-white" />
-              Recording
+              <span className="hidden sm:inline">Recording</span>
             </span>
           ) : null}
         </div>
         {connectionState === 'reconnecting' ? (
-          <span className="text-xs text-amber-400">Reconnecting…</span>
+          <span className="shrink-0 text-xs text-amber-400">Reconnecting…</span>
         ) : null}
       </header>
 
@@ -228,16 +201,12 @@ export default function MeetingPage() {
         <div className="relative flex min-w-0 flex-1 flex-col">
           <VideoGrid
             peers={peers}
-            self={self}
+            selfPeerId={selfPeerId}
             layoutMode={layoutMode}
             pinnedPeerId={pinnedPeerId}
+            incomingVideoOff={incomingVideoOff}
             onTogglePin={togglePin}
           />
-          {/* TODO(livekit): remote audio playback used to be a hand-rolled
-              RemoteAudioTrack loop over mediasoup consumers. LiveKit ships
-              this as a drop-in: <RoomAudioRenderer /> from
-              '@livekit/components-react' inside the Room context — delete
-              this comment and render that instead. */}
           <ReactionsLayer reactions={reactions} />
           <UnmutePrompt
             visible={unmutePromptVisible}
@@ -264,7 +233,7 @@ export default function MeetingPage() {
             chat={chat}
             peers={peers}
             waiting={waiting}
-            self={self}
+            self={self ? { ...self, peerId: selfPeerId } : null}
             flags={flags}
             actions={{
               sendChat,
@@ -282,11 +251,11 @@ export default function MeetingPage() {
       </div>
 
       <ControlBar
-        micOn={!!self?.micOn}
-        camOn={!!self?.camOn}
-        sharing={!!self?.sharing}
+        micOn={isMicrophoneEnabled}
+        camOn={isCameraEnabled}
+        sharing={isScreenShareEnabled}
         handRaised={!!self?.handRaised}
-        allowScreenShare={!!flags.allowScreenShare}
+        allowScreenShare={!!flags.screenShareEnabled}
         isHost={self?.role === 'HOST'}
         isHostOrCohost={self?.role === 'HOST' || self?.role === 'COHOST'}
         waitingCount={waiting.length}
@@ -316,30 +285,37 @@ export default function MeetingPage() {
         onLeave={handleLeaveClick}
       />
 
-      <Dialog open={showLastHostLeaveConfirm} onOpenChange={setShowLastHostLeaveConfirm}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>You&apos;re the last host in this meeting</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            There&apos;s no one else who can run it — leaving now will end the meeting for everyone still here.
-          </p>
-          <DialogFooter>
-            <Button variant="secondary" onClick={() => setShowLastHostLeaveConfirm(false)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => {
-                setShowLastHostLeaveConfirm(false);
-                handleLeave();
-              }}
-            >
+      <AlertDialog open={showLastHostLeaveConfirm} onOpenChange={setShowLastHostLeaveConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>You&apos;re the last host in this meeting</AlertDialogTitle>
+            <AlertDialogDescription>
+              There&apos;s no one else who can run it — leaving now will end the meeting for everyone still here.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" onClick={handleLeave}>
               Leave and end meeting
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={showEndForAllConfirm} onOpenChange={setShowEndForAllConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>End the meeting for everyone?</AlertDialogTitle>
+            <AlertDialogDescription>Everyone still in the call will be disconnected.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" onClick={endMeetingForAll}>
+              End for everyone
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

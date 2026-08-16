@@ -13,6 +13,7 @@ import java.util.Comparator;
 import java.util.List;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
@@ -95,6 +96,18 @@ public class AuthController {
     public void resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
         AppUser user = authService.resetPassword(request.token(), request.newPassword());
         sessions.findByPrincipalName(user.getEmail()).keySet().forEach(sessions::deleteById);
+    }
+
+    @PostMapping("/api/auth/set-password")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void setPassword(@AuthenticationPrincipal AuthPrincipal principal, @Valid @RequestBody SetPasswordRequest request) {
+        authService.setInitialPassword(principal.userId(), request.newPassword());
+    }
+
+    @PostMapping("/api/auth/change-password")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void changePassword(@AuthenticationPrincipal AuthPrincipal principal, @Valid @RequestBody ChangePasswordRequest request) {
+        authService.changePassword(principal.userId(), request.currentPassword(), request.newPassword());
     }
 
     @GetMapping("/api/auth/sessions")

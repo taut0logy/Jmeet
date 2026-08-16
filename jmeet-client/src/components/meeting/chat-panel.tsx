@@ -5,7 +5,7 @@ import { FiSend } from 'react-icons/fi';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
-export function ChatPanel({ chat, selfPeerId, allowChat, onSend }) {
+export function ChatPanel({ chat, selfPeerId, onSend }) {
   const [text, setText] = useState('');
   const listRef = useRef(null);
 
@@ -34,32 +34,26 @@ export function ChatPanel({ chat, selfPeerId, allowChat, onSend }) {
                   {m.peerId === selfPeerId ? 'You' : m.displayName}
                 </span>
                 <span className="text-[10px] text-neutral-500">
-                  {new Date(m.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  {new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </span>
               </div>
-              <p className="text-sm text-neutral-100 break-words">{m.text}</p>
+              <p className="text-sm text-neutral-100 break-words">{m.body}</p>
             </div>
           ))
         )}
       </div>
-      {allowChat ? (
-        <form onSubmit={handleSubmit} className="flex gap-2 border-t border-white/10 p-3">
-          <Input
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="Send a message"
-            aria-label="Chat message"
-            maxLength={2000}
-          />
-          <Button type="submit" size="icon" aria-label="Send message" disabled={!text.trim()}>
-            <FiSend />
-          </Button>
-        </form>
-      ) : (
-        <p className="border-t border-white/10 p-3 text-center text-xs text-neutral-500">
-          The host has turned off chat.
-        </p>
-      )}
+      <form onSubmit={handleSubmit} className="flex gap-2 border-t border-white/10 p-3">
+        <Input
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="Send a message"
+          aria-label="Chat message"
+          maxLength={2000}
+        />
+        <Button type="submit" size="icon" aria-label="Send message" disabled={!text.trim()}>
+          <FiSend />
+        </Button>
+      </form>
     </div>
   );
 }

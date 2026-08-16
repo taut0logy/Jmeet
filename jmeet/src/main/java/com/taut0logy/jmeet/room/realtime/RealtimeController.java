@@ -2,6 +2,7 @@ package com.taut0logy.jmeet.room.realtime;
 
 import com.taut0logy.jmeet.room.ChatSendRequest;
 import com.taut0logy.jmeet.room.RaiseHandRequest;
+import com.taut0logy.jmeet.room.ReactionSendRequest;
 import com.taut0logy.jmeet.room.RoomService;
 import org.springframework.messaging.handler.annotation.DestinationVariable;
 import org.springframework.messaging.handler.annotation.MessageMapping;
@@ -25,5 +26,10 @@ public class RealtimeController {
     @MessageMapping("/room/{sessionId}/hand")
     public void raiseHand(@DestinationVariable String sessionId, RaiseHandRequest request) {
         roomService.raiseHand(sessionId, request.peerId(), request.raised());
+    }
+
+    @MessageMapping("/room/{sessionId}/reaction")
+    public void reaction(@DestinationVariable String sessionId, ReactionSendRequest request) {
+        roomService.sendReaction(sessionId, request.peerId(), request.emoji());
     }
 }

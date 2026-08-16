@@ -95,6 +95,24 @@ public class AuthService {
         return user;
     }
 
+    @Transactional
+    public void setInitialPassword(String userId, String newPassword) {
+        AppUser user = users.findById(userId).orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND, "User not found."));
+        if (user.getPasswordHash() != null) {
+            throw new AppException(ErrorCode.PASSWORD_ALREADY_SET, "This account already has a password.");
+        }
+        user.setPasswordHash(passwordEncoder.encode(newPassword));
+    }
+
+    @Transactional
+    public void changePassword(String userId, String currentPassword, String newPassword) {
+        AppUser user = users.findById(userId).orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND, "User not found."));
+        if (user.getPasswordHash() == null || !passwordEncoder.matches(currentPassword, user.getPasswordHash())) {
+            throw new AppException(ErrorCode.INVALID_CREDENTIALS, "Current password is incorrect.");
+        }
+        user.setPasswordHash(passwordEncoder.encode(newPassword));
+    }
+
     public void requestPasswordReset(String email) {
         users.findByEmail(email.toLowerCase()).ifPresent(user -> {
             String rawToken = issueToken(user.getId(), AuthTokenPurpose.RESET_PASSWORD);

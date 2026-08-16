@@ -17,8 +17,6 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.ObjectMapper;
 
-/** §9.4: the duration warning and scheduled auto-end, both driven off the same scan since they
- * share the same "how close to the scheduled end are we" question. */
 @Component
 public class MeetingDurationScheduler {
 
@@ -59,7 +57,7 @@ public class MeetingDurationScheduler {
             Instant scheduledEnd = meeting.getStartsAt().plus(Duration.ofMinutes(meeting.getDurationMin()));
             Instant warnAt = scheduledEnd.minus(properties.durationWarning());
             if (!now.isBefore(warnAt) && now.isBefore(scheduledEnd)) {
-                maybeWarn(session.getId());
+                maybeWarn(session.getId(), scheduledEnd);
             }
 
             Instant autoEndAt = scheduledEnd.plus(properties.autoEndGrace());
@@ -69,9 +67,9 @@ public class MeetingDurationScheduler {
         }
     }
 
-    private void maybeWarn(String sessionId) {
+    private void maybeWarn(String sessionId, Instant scheduledEnd) {
         if (!claim("duration-warning:sent:" + sessionId)) return;
-        roomService.broadcastDurationWarning(sessionId);
+        roomService.broadcastDurationWarning(sessionId, scheduledEnd);
     }
 
     private void maybeDispatchClose(String sessionId) {

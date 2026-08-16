@@ -11,15 +11,20 @@ import com.taut0logy.jmeet.meeting.MeetingRepository;
 import com.taut0logy.jmeet.meeting.MeetingService;
 import com.taut0logy.jmeet.meeting.MeetingStatus;
 import com.taut0logy.jmeet.meeting.ParticipantRole;
+import com.taut0logy.jmeet.meeting.WaitingRoomPolicy;
 import com.taut0logy.jmeet.meeting.session.ChatMessage;
 import com.taut0logy.jmeet.meeting.session.ChatMessageRepository;
 import com.taut0logy.jmeet.meeting.session.MeetingSession;
 import com.taut0logy.jmeet.meeting.session.MeetingSessionRepository;
 import com.taut0logy.jmeet.meeting.session.Participation;
 import com.taut0logy.jmeet.meeting.session.ParticipationRepository;
+import com.taut0logy.jmeet.recording.Recording;
+import com.taut0logy.jmeet.recording.RecordingRepository;
 import com.taut0logy.jmeet.recording.RecordingService;
+import com.taut0logy.jmeet.recording.RecordingStatus;
 import com.taut0logy.jmeet.user.Profile;
 import com.taut0logy.jmeet.user.ProfileRepository;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -55,13 +60,14 @@ public class RoomService {
     private final SimpMessagingTemplate messaging;
     private final ObjectMapper json;
     private final RecordingService recordingService;
+    private final RecordingRepository recordings;
     private final TransactionTemplate requiresNewTransaction;
 
     public RoomService(MeetingRepository meetings, MeetingService meetingService, MeetingSessionRepository sessions,
             ParticipationRepository participations, ChatMessageRepository chatMessages, ProfileRepository profiles,
             GuestJoinTokenService joinTokens, RoomMediaPort media, RoomProperties roomProperties,
             StringRedisTemplate redis, SimpMessagingTemplate messaging, ObjectMapper json,
-            RecordingService recordingService, PlatformTransactionManager transactionManager) {
+            RecordingService recordingService, RecordingRepository recordings, PlatformTransactionManager transactionManager) {
         this.meetings = meetings;
         this.meetingService = meetingService;
         this.sessions = sessions;
@@ -75,6 +81,7 @@ public class RoomService {
         this.messaging = messaging;
         this.json = json;
         this.recordingService = recordingService;
+        this.recordings = recordings;
         this.requiresNewTransaction = new TransactionTemplate(transactionManager);
         this.requiresNewTransaction.setPropagationBehavior(TransactionTemplate.PROPAGATION_REQUIRES_NEW);
     }
@@ -98,16 +105,17 @@ public class RoomService {
         }
 
         String userId = claims.userId();
-        if (userId != null && roomProperties.singleMeetingEnabled()
-                && !participations.findByUserIdAndLeftAtIsNull(userId).isEmpty()) {
-            throw new AppException(ErrorCode.ALREADY_IN_MEETING, "You are already in another meeting.");
+        if (userId != null && roomProperties.singleMeetingEnabled()) {
+            List<Participation> existing = participations.findByUserIdAndLeftAtIsNull(userId);
+
+            existing.stream().filter(this::isOrphaned).forEach(Participation::leave);
+            if (existing.stream().anyMatch(Participation::isActive)) {
+                throw new AppException(ErrorCode.ALREADY_IN_MEETING, "You are already in another meeting.");
+            }
         }
 
         MeetingSession session = findOrCreateLiveSession(meeting);
-        // Held for the rest of this transaction: without it, two concurrent joins can both read
-        // activeCount below max before either commits its Participation insert, letting more than
-        // max-participants in at once. Proven under real concurrent load, not just reasoned about
-        // — see RoomIntegrationTest.concurrentJoinsNeverExceedMaxParticipants.
+
         sessions.lockForUpdate(session.getId());
         long activeCount = participations.findBySessionIdAndLeftAtIsNull(session.getId()).size();
         if (activeCount >= roomProperties.maxParticipants()) {
@@ -214,7 +222,11 @@ public class RoomService {
         meetingService.requireHostOrCohost(userId, meeting.getId());
         Participation participation = requireActiveParticipation(sessionId, peerId);
 
-        media.removeParticipant(meeting.getCode(), peerId);
+        try {
+            media.removeParticipant(meeting.getCode(), peerId);
+        } catch (RuntimeException e) {
+            log.warn("failed to remove {} from LiveKit room {}: {}", peerId, meeting.getCode(), e.getMessage());
+        }
         participation.leave();
 
         long rev = bumpRev(sessionId);
@@ -229,6 +241,9 @@ public class RoomService {
 
         if (request.locked() != null) {
             if (request.locked()) meeting.lock(); else meeting.unlock();
+        }
+        if (request.waitingRoom() != null) {
+            meeting.setWaitingRoom(WaitingRoomPolicy.valueOf(request.waitingRoom()));
         }
         if (request.screenShareEnabled() != null) {
             redis.opsForHash().put(flagsKey(sessionId), "screenShareEnabled", request.screenShareEnabled().toString());
@@ -248,7 +263,8 @@ public class RoomService {
         long rev = bumpRev(sessionId);
         RoomSnapshot snapshot = snapshot(session, meeting, rev);
         broadcast(roomTopic(sessionId), new RoomBroadcast("flags-changed", rev,
-                Map.of("locked", meeting.getLockedAt() != null, "screenShareEnabled", snapshot.screenShareEnabled())));
+                Map.of("locked", meeting.getLockedAt() != null, "screenShareEnabled", snapshot.screenShareEnabled(),
+                        "waitingRoom", meeting.getWaitingRoom().name())));
         return snapshot;
     }
 
@@ -260,8 +276,6 @@ public class RoomService {
         endSession(session, meeting);
     }
 
-    /** §9.4's scheduled auto-end: a system action, not a user one — no platform-role check,
-     * only a scheduler deciding a meeting has run past its time. */
     @Transactional
     public void autoEndSession(String sessionId) {
         MeetingSession session = sessions.findById(sessionId).orElse(null);
@@ -284,10 +298,9 @@ public class RoomService {
         broadcast(roomTopic(session.getId()), new RoomBroadcast("room-ended", rev, Map.of()));
     }
 
-    /** §9.4's duration warning, pushed before the scheduled end. */
-    public void broadcastDurationWarning(String sessionId) {
+    public void broadcastDurationWarning(String sessionId, Instant endsAt) {
         long rev = bumpRev(sessionId);
-        broadcast(roomTopic(sessionId), new RoomBroadcast("duration-warning", rev, Map.of()));
+        broadcast(roomTopic(sessionId), new RoomBroadcast("duration-warning", rev, Map.of("endsAt", endsAt.toString())));
     }
 
     @Transactional
@@ -299,6 +312,12 @@ public class RoomService {
 
         long rev = bumpRev(sessionId);
         broadcast(roomTopic(sessionId), new RoomBroadcast("chat", rev, ChatMessageView.from(message)));
+    }
+
+    public void sendReaction(String sessionId, String peerId, String emoji) {
+        requireActiveParticipation(sessionId, peerId);
+        long rev = bumpRev(sessionId);
+        broadcast(roomTopic(sessionId), new RoomBroadcast("reaction", rev, Map.of("peerId", peerId, "emoji", emoji)));
     }
 
     public void raiseHand(String sessionId, String peerId, boolean raised) {
@@ -375,13 +394,6 @@ public class RoomService {
                 new RoomBroadcast("admission-decided", rev, Map.of("status", "DENIED")));
     }
 
-    /** meeting_session_live_uq is the actual race guard for "one live session per meeting" —
-     * concurrent joins can both pass the findBy check before either commits. The insert attempt
-     * runs in its own REQUIRES_NEW transaction rather than plain try/catch: a flush-triggered
-     * constraint violation marks the *whole* transaction rollback-only, so catching it here and
-     * continuing to query in the same (join()'s) transaction doesn't work — the connection is
-     * already poisoned. Isolating the attempt means a loser's failure rolls back on its own,
-     * leaving the caller's transaction clean to re-read the winner's row. */
     private MeetingSession findOrCreateLiveSession(Meeting meeting) {
         return sessions.findByMeetingIdAndEndedAtIsNull(meeting.getId())
                 .or(() -> attemptCreateSession(meeting))
@@ -411,17 +423,38 @@ public class RoomService {
         String screenShareFlag = (String) redis.opsForHash().get(flagsKey(session.getId()), "screenShareEnabled");
         boolean screenShareEnabled = screenShareFlag == null || Boolean.parseBoolean(screenShareFlag);
 
+        List<RoomSnapshot.PendingAdmissionView> pending = redis.opsForHash().values(pendingKey(session.getId())).stream()
+                .map(raw -> json.readValue((String) raw, PendingAdmission.class))
+                .map(p -> new RoomSnapshot.PendingAdmissionView(p.peerId(), p.displayName()))
+                .toList();
+
+        Recording activeRecording = recordings.findBySessionIdAndStatus(session.getId(), RecordingStatus.RECORDING).orElse(null);
+
         return new RoomSnapshot(session.getId(), meeting.getId(), meeting.getTitle(), meeting.getLockedAt() != null,
-                meeting.isMuteOnEntry(), meeting.isCameraOffOnEntry(), screenShareEnabled,
-                roomProperties.screenShareMaxConcurrent(), participantViews, chat, rev);
+                meeting.getWaitingRoom().name(), meeting.isMuteOnEntry(), meeting.isCameraOffOnEntry(), screenShareEnabled,
+                roomProperties.screenShareMaxConcurrent(), participantViews, chat, pending,
+                activeRecording != null, activeRecording != null ? activeRecording.getStartedAt() : null,
+                activeRecording != null ? activeRecording.getStartedBy() : null, rev);
+    }
+
+    private boolean isOrphaned(Participation p) {
+        try {
+            MeetingSession session = sessions.findById(p.getSessionId()).orElse(null);
+            if (session == null) return true;
+            Meeting meeting = meetings.findById(session.getMeetingId()).orElse(null);
+            if (meeting == null) return true;
+            return media.listParticipants(meeting.getCode()).stream()
+                    .noneMatch(live -> live.identity().equals(p.getPeerId()));
+        } catch (RuntimeException e) {
+            log.warn("failed to check live status for stale participation {}: {}", p.getId(), e.getMessage());
+            return false;
+        }
     }
 
     private void broadcastPresence(String sessionId, String type, Participation participation, long rev) {
         broadcast(roomTopic(sessionId), new RoomBroadcast(type, rev, ParticipantView.from(participation, false)));
     }
 
-    /** §11.3's "latency optimisation, not a correctness dependency" applies symmetrically here:
-     * a broker hiccup must not fail the REST action that already committed to the database. */
     private void broadcast(String destination, RoomBroadcast payload) {
         try {
             messaging.convertAndSend(destination, payload);

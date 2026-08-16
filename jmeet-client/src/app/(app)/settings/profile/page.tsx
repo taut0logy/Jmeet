@@ -2,8 +2,10 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { FiLoader, FiUpload } from 'react-icons/fi';
-import { api, ApiError } from '@/lib/api/client';
+import { FiLoader, FiCamera } from 'react-icons/fi';
+import { api, ApiError, ensureCsrfToken } from '@/lib/api/client';
+import { AvatarEditorDialog } from '@/components/profile/avatar-editor-dialog';
+import { ChangePasswordCard } from '@/components/profile/change-password-card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -20,12 +22,17 @@ function initialsFor(name) {
 
 export default function ProfileSettingsPage() {
   const [profile, setProfile] = useState(null);
+  const [session, setSession] = useState(null);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [pendingFile, setPendingFile] = useState(null);
   const fileInputRef = useRef(null);
 
   useEffect(() => {
-    api.get('/users/me').then((res) => setProfile(res.profile));
+    api.get('/users/me').then((res) => {
+      setProfile(res.profile);
+      setSession(res.user);
+    });
   }, []);
 
   async function handleSave(e) {
@@ -45,14 +52,23 @@ export default function ProfileSettingsPage() {
     }
   }
 
-  async function handleAvatarChange(e) {
+  function handleFilePicked(e) {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (file) setPendingFile(file);
+    e.target.value = '';
+  }
+
+  async function handleSaveCrop(blob) {
     setUploading(true);
     try {
+      const token = await ensureCsrfToken();
       const formData = new FormData();
-      formData.append('file', file);
-      const res = await fetch('/api/users/me/avatar', { method: 'POST', body: formData });
+      formData.append('file', blob, 'avatar.png');
+      const res = await fetch('/api/users/me/avatar', {
+        method: 'POST',
+        headers: token ? { 'X-XSRF-TOKEN': token } : undefined,
+        body: formData,
+      });
       if (!res.ok) throw new Error('Upload failed');
       const { profile: updated } = await res.json();
       setProfile(updated);
@@ -73,59 +89,79 @@ export default function ProfileSettingsPage() {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Profile</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSave} className="space-y-5">
-          <div className="flex items-center gap-4">
-            <Avatar className="size-16">
-              <AvatarImage src={profile.avatarUrl ?? undefined} alt={profile.displayName} />
-              <AvatarFallback className="text-lg">{initialsFor(profile.displayName)}</AvatarFallback>
-            </Avatar>
-            <div>
-              <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={handleAvatarChange} />
-              <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
-                {uploading ? <FiLoader className="size-4 animate-spin" /> : <FiUpload className="size-4" />}
-                Change photo
-              </Button>
-              <p className="mt-1 text-xs text-muted-foreground">PNG, JPEG, or WebP. Up to 2MB.</p>
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Profile</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSave} className="space-y-5">
+            <div className="flex items-center gap-4">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                className="hidden"
+                onChange={handleFilePicked}
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                aria-label="Change profile photo"
+                className="group relative size-16 shrink-0 rounded-full outline-offset-2 focus-visible:outline-2 focus-visible:outline-ring disabled:pointer-events-none"
+              >
+                <Avatar className="size-16">
+                  <AvatarImage src={profile.avatarUrl ?? undefined} alt={profile.displayName} />
+                  <AvatarFallback className="text-lg">{initialsFor(profile.displayName)}</AvatarFallback>
+                </Avatar>
+                <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/0 text-transparent transition-colors group-hover:bg-black/45 group-hover:text-white">
+                  {uploading ? <FiLoader className="size-5 animate-spin" /> : <FiCamera className="size-5" />}
+                </span>
+              </button>
+              <div>
+                <p className="text-sm font-medium">{profile.displayName}</p>
+                <p className="text-xs text-muted-foreground">Click your photo to change it. PNG, JPEG, or WebP, up to 2MB.</p>
+              </div>
             </div>
-          </div>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="displayName">Display name</Label>
-            <Input
-              id="displayName"
-              value={profile.displayName}
-              onChange={(e) => setProfile({ ...profile, displayName: e.target.value })}
-              required
-            />
-          </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="displayName">Display name</Label>
+              <Input
+                id="displayName"
+                value={profile.displayName}
+                onChange={(e) => setProfile({ ...profile, displayName: e.target.value })}
+                required
+              />
+            </div>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="profile-timezone">Timezone</Label>
-            <Select value={profile.timezone} onValueChange={(tz) => setProfile({ ...profile, timezone: tz })}>
-              <SelectTrigger id="profile-timezone" className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="max-h-64">
-                {TIMEZONES.map((tz) => (
-                  <SelectItem key={tz} value={tz}>
-                    {tz}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="profile-timezone">Timezone</Label>
+              <Select value={profile.timezone} onValueChange={(tz) => setProfile({ ...profile, timezone: tz })}>
+                <SelectTrigger id="profile-timezone" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="max-h-64">
+                  {TIMEZONES.map((tz) => (
+                    <SelectItem key={tz} value={tz}>
+                      {tz}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-          <Button type="submit" disabled={saving}>
-            {saving ? <FiLoader className="size-4 animate-spin" /> : null}
-            Save changes
-          </Button>
-        </form>
-      </CardContent>
-    </Card>
+            <Button type="submit" disabled={saving}>
+              {saving ? <FiLoader className="size-4 animate-spin" /> : null}
+              Save changes
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      {session?.hasPassword ? <ChangePasswordCard /> : null}
+
+      <AvatarEditorDialog file={pendingFile} onOpenChange={(open) => !open && setPendingFile(null)} onSave={handleSaveCrop} />
+    </div>
   );
 }

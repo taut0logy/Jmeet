@@ -23,7 +23,7 @@ export function ParticipantTile({
   isScreenShare = false,
   pinned = false,
   pinnable = false,
-  onTogglePin,
+  onTogglePin = (_peerId: string) => {},
   large = false,
   score = null,
   speaking = false,

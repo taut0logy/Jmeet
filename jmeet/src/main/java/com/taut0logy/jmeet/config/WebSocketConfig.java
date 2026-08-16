@@ -42,6 +42,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         registry.setApplicationDestinationPrefixes("/app");
         registry.setUserDestinationPrefix("/user");
         registry.enableStompBrokerRelay("/topic", "/queue")
+                .setVirtualHost("/")
                 .setRelayHost(rabbitConnectionDetails.getFirstAddress().host())
                 .setRelayPort(realtimeProperties.stompRelayPort())
                 .setClientLogin(rabbitConnectionDetails.getUsername())

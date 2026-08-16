@@ -47,6 +47,7 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
         SecurityContextHolder.setContext(context);
         securityContextRepository.saveContext(context, request, response);
 
-        response.sendRedirect(clientProperties.baseUrl() + "/dashboard");
+        String redirectPath = user.getPasswordHash() == null ? "/set-password" : "/dashboard";
+        response.sendRedirect(clientProperties.baseUrl() + redirectPath);
     }
 }

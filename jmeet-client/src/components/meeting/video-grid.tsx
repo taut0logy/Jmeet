@@ -1,54 +1,80 @@
 'use client';
 
 import { useMemo } from 'react';
+import { Track } from 'livekit-client';
+import { useTracks, useSpeakingParticipants, useParticipants } from '@livekit/components-react';
 import { ParticipantTile } from './participant-tile';
-import type { Peer } from '@/stores/meetingStore';
+import type { PeerMeta } from '@/stores/meetingStore';
 
 type VideoGridProps = {
-  peers: Record<string, Peer>;
-  self?: Peer | null;
-  speakingPeerIds?: string[];
+  peers: Record<string, PeerMeta>;
+  selfPeerId?: string | null;
   layoutMode?: 'tiled' | 'spotlight' | 'sidebar';
   pinnedPeerId?: string | null;
-  dominantSpeakerId?: string | null;
+  incomingVideoOff?: boolean;
   onTogglePin: (peerId: string) => void;
 };
 
-// Tiled / Spotlight / Sidebar, with manual pin overriding the automatic
-// spotlight target. `screenTiles` are always preferred as the spotlight
-// target over a pinned peer's cam feed only when nothing is pinned — an
-// explicit pin always wins. This layout algorithm is unchanged by the SFU
-// swap; only where camTiles/screenTiles' tracks come from changes.
-//
-// TODO(livekit): camTiles/screenTiles used to be built here by manually
-// cross-referencing `producers` + `consumers` maps by peerId/source. Replace
-// with LiveKit's `useTracks([Track.Source.Camera, Track.Source.ScreenShare])`
-// from @livekit/components-react, which returns TrackReference objects
-// directly — group those by source into the same
-// `{ peer, track, isSelf, isScreenShare, speaking, score }` shape the JSX
-// below expects, then delete this stub.
 export function VideoGrid({
   peers,
-  self,
-  speakingPeerIds = [],
+  selfPeerId,
   layoutMode = 'tiled',
   pinnedPeerId,
-  dominantSpeakerId,
+  incomingVideoOff = false,
   onTogglePin,
 }: VideoGridProps) {
-  const { camTiles, screenTiles } = useMemo(() => {
-    // Placeholder — see TODO above. Renders name-only tiles (no track) for
-    // every known peer so the layout is visible before LiveKit is wired in.
-    const speakingSet = new Set(speakingPeerIds);
-    const cams = Object.values(peers).map((peer) => ({
-      peer,
-      track: null,
-      isSelf: peer.peerId === self?.peerId,
-      speaking: speakingSet.has(peer.peerId),
-    }));
+  const trackRefs = useTracks([Track.Source.Camera, Track.Source.ScreenShare]);
+  const speaking = useSpeakingParticipants();
+  const liveParticipants = useParticipants();
+
+  const { camTiles, screenTiles, dominantSpeakerId } = useMemo(() => {
+    const speakingIds = speaking.map((p) => p.identity);
+    const speakingSet = new Set(speakingIds);
+    const camByPeer = new Map(
+      trackRefs.filter((t) => t.source === Track.Source.Camera).map((t) => [t.participant.identity, t]),
+    );
+    const screenRefs = trackRefs.filter((t) => t.source === Track.Source.ScreenShare);
+    const liveByPeer = new Map(liveParticipants.map((p) => [p.identity, p]));
+
+    const cams = Object.values(peers).map((peer) => {
+      const isSelf = peer.peerId === selfPeerId;
+      const ref = camByPeer.get(peer.peerId);
+      const trackVisible = !!ref && (isSelf || !incomingVideoOff);
+      const live = liveByPeer.get(peer.peerId);
+      return {
+        peer: { ...peer, micOn: live?.isMicrophoneEnabled ?? false, camOn: !!ref },
+        track: trackVisible ? (ref!.publication.track?.mediaStreamTrack ?? null) : null,
+        isSelf,
+        isScreenShare: false as const,
+        speaking: speakingSet.has(peer.peerId),
+        score: null as number | null, // TODO(polish): per-participant connection quality
+      };
+    });
     cams.sort((a, b) => (b.isSelf ? 1 : 0) - (a.isSelf ? 1 : 0));
-    return { camTiles: cams, screenTiles: [] };
-  }, [peers, self, speakingPeerIds]);
+
+    const screens = incomingVideoOff
+      ? []
+      : screenRefs.map((ref) => {
+          const meta = peers[ref.participant.identity];
+          return {
+            peer: meta ?? {
+              peerId: ref.participant.identity,
+              displayName: ref.participant.name || ref.participant.identity,
+              role: 'PARTICIPANT' as const,
+              handRaised: false,
+              micOn: false,
+              camOn: false,
+            },
+            track: ref.publication.track?.mediaStreamTrack ?? null,
+            isSelf: ref.participant.identity === selfPeerId,
+            isScreenShare: true as const,
+            speaking: false,
+            score: null as number | null,
+          };
+        });
+
+    return { camTiles: cams, screenTiles: screens, dominantSpeakerId: speakingIds.find((id) => id !== selfPeerId) ?? null };
+  }, [peers, selfPeerId, trackRefs, speaking, liveParticipants, incomingVideoOff]);
 
   if (layoutMode === 'tiled') {
     return (
@@ -71,8 +97,6 @@ export function VideoGrid({
     );
   }
 
-  // Spotlight/Sidebar share the same "one big + a strip of others" shape;
-  // only the strip's orientation differs.
   const isSidebar = layoutMode === 'sidebar';
   const spotlightScreen = screenTiles[0] ?? null;
   const spotlightPeerId = pinnedPeerId ?? spotlightScreen?.peer.peerId ?? dominantSpeakerId ?? camTiles[0]?.peer.peerId;

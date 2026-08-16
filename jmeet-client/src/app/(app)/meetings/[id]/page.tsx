@@ -17,12 +17,17 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
-// scope=following can change title/duration/time-of-day but never the
-// recurrence pattern itself (Phase B spec §5.4) — a deliberate one-Meeting-
-// row-per-series design trade-off. This dialog is the UI surface for that:
-// it only exposes the fields the API actually accepts for this scope, so
-// there's nothing to "disable" — the pattern controls simply aren't here.
 function EditFollowingDialog({ open, onOpenChange, occurrence, onSave }) {
   const [title, setTitle] = useState('');
   const [durationMin, setDurationMin] = useState(60);
@@ -149,6 +154,8 @@ export default function MeetingDetailPage() {
   const [submitting, setSubmitting] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [editingOccurrence, setEditingOccurrence] = useState(null);
+  const [confirmAction, setConfirmAction] = useState(null);
+  const [confirmBusy, setConfirmBusy] = useState(false);
   const [recordings, setRecordings] = useState(null);
 
   const load = useCallback(async () => {
@@ -166,9 +173,6 @@ export default function MeetingDetailPage() {
       const data = await api.get(`/meetings/${id}/recordings`);
       setRecordings(data.recordings);
     } catch {
-      // Not every viewer of this page is host/cohost-eligible for the
-      // recordings sub-resource even when they can see the meeting itself —
-      // leave the section absent rather than surface a scary error toast.
       setRecordings([]);
     }
   }, [id]);
@@ -178,9 +182,6 @@ export default function MeetingDetailPage() {
     loadRecordings();
   }, [load, loadRecordings]);
 
-  // Polls while a recording is actively RECORDING or PROCESSING (e.g. the
-  // meeting is live in another tab right now) so status/download links
-  // appear without a manual refresh — stops itself once nothing is pending.
   useEffect(() => {
     const pending = recordings?.some((r) => r.status === 'RECORDING' || r.status === 'PROCESSING');
     if (!pending) return undefined;
@@ -201,11 +202,17 @@ export default function MeetingDetailPage() {
     }
   }
 
-  async function handleCancelMeeting() {
-    if (!confirm('Cancel this entire meeting series?')) return;
-    await api.delete(`/meetings/${id}?scope=all`);
-    toast.success('Meeting cancelled');
-    router.push('/dashboard');
+  function handleCancelMeeting() {
+    setConfirmAction({
+      title: 'Cancel this meeting?',
+      description: 'This cancels the entire series, not just one occurrence.',
+      confirmLabel: 'Cancel meeting',
+      run: async () => {
+        await api.delete(`/meetings/${id}?scope=all`);
+        toast.success('Meeting cancelled');
+        router.push('/dashboard');
+      },
+    });
   }
 
   async function handleCancelOccurrence(originalStartsAt) {
@@ -214,11 +221,17 @@ export default function MeetingDetailPage() {
     load();
   }
 
-  async function handleCancelFollowing(originalStartsAt) {
-    if (!confirm('Cancel this occurrence and every one after it?')) return;
-    await api.delete(`/meetings/${id}?scope=following&originalStartsAt=${encodeURIComponent(originalStartsAt)}`);
-    toast.success('Series truncated');
-    load();
+  function handleCancelFollowing(originalStartsAt) {
+    setConfirmAction({
+      title: 'Cancel this and following occurrences?',
+      description: 'Every occurrence from this one onward will be cancelled. Earlier occurrences are unaffected.',
+      confirmLabel: 'Cancel these',
+      run: async () => {
+        await api.delete(`/meetings/${id}?scope=following&originalStartsAt=${encodeURIComponent(originalStartsAt)}`);
+        toast.success('Series truncated');
+        load();
+      },
+    });
   }
 
   async function handleSaveFollowing(patch) {
@@ -281,13 +294,13 @@ export default function MeetingDetailPage() {
         </CardHeader>
       </Card>
 
-      {meeting.nextOccurrences?.length ? (
+      {meeting.occurrences?.length ? (
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Upcoming occurrences</CardTitle>
           </CardHeader>
           <CardContent className="space-y-1">
-            {meeting.nextOccurrences.map((occ) => (
+            {meeting.occurrences.map((occ) => (
               <div key={occ.originalStartsAt} className="flex items-center justify-between rounded-md px-2 py-1.5 text-sm hover:bg-accent">
                 <span>{formatOccurrence(occ.startsAt)}</span>
                 <DropdownMenu>
@@ -396,6 +409,35 @@ export default function MeetingDetailPage() {
         occurrence={editingOccurrence}
         onSave={handleSaveFollowing}
       />
+
+      <AlertDialog open={!!confirmAction} onOpenChange={(open) => !open && setConfirmAction(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{confirmAction?.title}</AlertDialogTitle>
+            <AlertDialogDescription>{confirmAction?.description}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={confirmBusy}
+              onClick={async () => {
+                setConfirmBusy(true);
+                try {
+                  await confirmAction.run();
+                  setConfirmAction(null);
+                } catch (err) {
+                  toast.error(err instanceof ApiError ? err.message : 'Something went wrong.');
+                } finally {
+                  setConfirmBusy(false);
+                }
+              }}
+            >
+              {confirmAction?.confirmLabel}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

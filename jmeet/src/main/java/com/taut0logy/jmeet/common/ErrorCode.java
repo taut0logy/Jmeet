@@ -45,7 +45,8 @@ public enum ErrorCode {
     INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED),
     TOKEN_INVALID(HttpStatus.BAD_REQUEST),
     TOKEN_EXPIRED(HttpStatus.BAD_REQUEST),
-    TOKEN_USED(HttpStatus.BAD_REQUEST);
+    TOKEN_USED(HttpStatus.BAD_REQUEST),
+    PASSWORD_ALREADY_SET(HttpStatus.CONFLICT);
 
     private final HttpStatus status;
 

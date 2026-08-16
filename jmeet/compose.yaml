@@ -56,4 +56,23 @@ services:
       /bin/sh -c "
       until mc alias set jmeet http://minio:9000 jmeet jmeetsecret; do sleep 1; done;
       mc mb -p jmeet/jmeet;
+      mc mb -p jmeet/jmeet-recordings;
       "
+  livekit:
+    image: livekit/livekit-server:latest
+    command: --config /etc/livekit.yaml
+    depends_on: [redis]
+    ports:
+      - '7880:7880'
+      - '7881:7881'
+      - '50100-50200:50100-50200/udp'
+    volumes:
+      - ./docker/livekit/livekit.yaml:/etc/livekit.yaml
+  egress:
+    image: livekit/egress:latest
+    depends_on: [livekit, redis]
+    environment:
+      - 'EGRESS_CONFIG_FILE=/etc/egress.yaml'
+    volumes:
+      - ./docker/livekit/egress.yaml:/etc/egress.yaml
+    shm_size: 1gb
