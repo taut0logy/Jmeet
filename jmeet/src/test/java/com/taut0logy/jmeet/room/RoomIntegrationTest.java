@@ -185,6 +185,51 @@ class RoomIntegrationTest {
         return (String) json.readValue(response.body(), Map.class).get("token");
     }
 
+    /** Load/concurrency hardening: the room-full check in RoomService.join() reads the active
+     * count and inserts a new Participation in separate steps — a classic check-then-act shape.
+     * A sequential test could never expose a race there; this fires every join at once against a
+     * real Postgres to find out whether concurrent requests can squeeze past app.meeting.
+     * max-participants (30 by default). */
+    @Test
+    void concurrentJoinsNeverExceedMaxParticipants() throws Exception {
+        String email = "room-load-" + System.nanoTime() + "@example.com";
+        Client owner = registerAndLogin(email, "Grace Hopper");
+        String code = createMeeting(owner, "Load Test Sync", "OFF");
+
+        int attempts = 40;
+        List<Client> guests = new java.util.ArrayList<>();
+        List<String> joinTokens = new java.util.ArrayList<>();
+        for (int i = 0; i < attempts; i++) {
+            Client guest = new Client();
+            joinTokens.add(mintGuestJoinToken(guest, code, "Guest " + i));
+            guests.add(guest);
+        }
+
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(attempts);
+        List<java.util.concurrent.Future<Integer>> futures = new java.util.ArrayList<>();
+        for (int i = 0; i < attempts; i++) {
+            Client guest = guests.get(i);
+            String joinToken = joinTokens.get(i);
+            futures.add(pool.submit(() -> {
+                HttpResponse<String> response = post(guest, "/rooms/" + code + "/join", new RoomJoinRequest(joinToken));
+                return response.statusCode();
+            }));
+        }
+        pool.shutdown();
+
+        long admitted = 0;
+        long roomFull = 0;
+        for (java.util.concurrent.Future<Integer> future : futures) {
+            int status = future.get();
+            if (status == 200) admitted++;
+            else if (status == 409) roomFull++;
+            else throw new AssertionError("unexpected join status: " + status);
+        }
+
+        assertThat(admitted).as("admitted joins must never exceed max-participants").isLessThanOrEqualTo(30);
+        assertThat(admitted + roomFull).isEqualTo(attempts);
+    }
+
     @Test
     void joinAdmitsImmediatelyWhenNoApprovalRequired() throws Exception {
         String email = "room-owner-" + System.nanoTime() + "@example.com";

@@ -1,4 +1,10 @@
 spring:
+  datasource:
+    hikari:
+      # Default (10) is too small for the concurrency test in RoomIntegrationTest, which holds
+      # two connections per in-flight join() (the outer transaction plus the REQUIRES_NEW one
+      # used to isolate the meeting_session race) across up to 40 simultaneous requests.
+      maximum-pool-size: 60
   security:
     oauth2:
       client:

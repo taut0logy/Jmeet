@@ -22,6 +22,7 @@ import com.taut0logy.jmeet.user.Profile;
 import com.taut0logy.jmeet.user.ProfileRepository;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,7 +32,9 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.messaging.MessagingException;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 
 @Service
@@ -52,12 +55,13 @@ public class RoomService {
     private final SimpMessagingTemplate messaging;
     private final ObjectMapper json;
     private final RecordingService recordingService;
+    private final TransactionTemplate requiresNewTransaction;
 
     public RoomService(MeetingRepository meetings, MeetingService meetingService, MeetingSessionRepository sessions,
             ParticipationRepository participations, ChatMessageRepository chatMessages, ProfileRepository profiles,
             GuestJoinTokenService joinTokens, RoomMediaPort media, RoomProperties roomProperties,
             StringRedisTemplate redis, SimpMessagingTemplate messaging, ObjectMapper json,
-            RecordingService recordingService) {
+            RecordingService recordingService, PlatformTransactionManager transactionManager) {
         this.meetings = meetings;
         this.meetingService = meetingService;
         this.sessions = sessions;
@@ -71,6 +75,8 @@ public class RoomService {
         this.messaging = messaging;
         this.json = json;
         this.recordingService = recordingService;
+        this.requiresNewTransaction = new TransactionTemplate(transactionManager);
+        this.requiresNewTransaction.setPropagationBehavior(TransactionTemplate.PROPAGATION_REQUIRES_NEW);
     }
 
     @Transactional
@@ -98,6 +104,11 @@ public class RoomService {
         }
 
         MeetingSession session = findOrCreateLiveSession(meeting);
+        // Held for the rest of this transaction: without it, two concurrent joins can both read
+        // activeCount below max before either commits its Participation insert, letting more than
+        // max-participants in at once. Proven under real concurrent load, not just reasoned about
+        // — see RoomIntegrationTest.concurrentJoinsNeverExceedMaxParticipants.
+        sessions.lockForUpdate(session.getId());
         long activeCount = participations.findBySessionIdAndLeftAtIsNull(session.getId()).size();
         if (activeCount >= roomProperties.maxParticipants()) {
             throw new AppException(ErrorCode.ROOM_FULL, "This meeting is full.");
@@ -364,15 +375,27 @@ public class RoomService {
                 new RoomBroadcast("admission-decided", rev, Map.of("status", "DENIED")));
     }
 
+    /** meeting_session_live_uq is the actual race guard for "one live session per meeting" —
+     * concurrent joins can both pass the findBy check before either commits. The insert attempt
+     * runs in its own REQUIRES_NEW transaction rather than plain try/catch: a flush-triggered
+     * constraint violation marks the *whole* transaction rollback-only, so catching it here and
+     * continuing to query in the same (join()'s) transaction doesn't work — the connection is
+     * already poisoned. Isolating the attempt means a loser's failure rolls back on its own,
+     * leaving the caller's transaction clean to re-read the winner's row. */
     private MeetingSession findOrCreateLiveSession(Meeting meeting) {
-        return sessions.findByMeetingIdAndEndedAtIsNull(meeting.getId()).orElseGet(() -> {
-            try {
-                return sessions.save(new MeetingSession(Ids.next(), meeting.getId(), meeting.getStartsAt()));
-            } catch (DataIntegrityViolationException e) {
-                return sessions.findByMeetingIdAndEndedAtIsNull(meeting.getId())
-                        .orElseThrow(() -> new AppException(ErrorCode.INTERNAL, "failed to establish a live session"));
-            }
-        });
+        return sessions.findByMeetingIdAndEndedAtIsNull(meeting.getId())
+                .or(() -> attemptCreateSession(meeting))
+                .or(() -> sessions.findByMeetingIdAndEndedAtIsNull(meeting.getId()))
+                .orElseThrow(() -> new AppException(ErrorCode.INTERNAL, "failed to establish a live session"));
+    }
+
+    private Optional<MeetingSession> attemptCreateSession(Meeting meeting) {
+        try {
+            return Optional.of(requiresNewTransaction.execute(status ->
+                    sessions.save(new MeetingSession(Ids.next(), meeting.getId(), meeting.getStartsAt()))));
+        } catch (DataIntegrityViolationException e) {
+            return Optional.empty();
+        }
     }
 
     private RoomSnapshot snapshot(MeetingSession session, Meeting meeting, long rev) {

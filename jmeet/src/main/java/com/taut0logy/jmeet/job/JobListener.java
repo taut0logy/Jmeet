@@ -2,6 +2,7 @@ package com.taut0logy.jmeet.job;
 
 import com.rabbitmq.client.Channel;
 import com.taut0logy.jmeet.config.JobsProperties;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.List;
@@ -9,6 +10,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import org.slf4j.MDC;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
@@ -22,9 +24,10 @@ public class JobListener {
     private final JobRecordRepository jobRecords;
     private final RabbitTemplate rabbitTemplate;
     private final JobsProperties properties;
+    private final MeterRegistry meterRegistry;
 
     public JobListener(List<JobHandler> handlerList, JobRecordRepository jobRecords,
-            RabbitTemplate rabbitTemplate, JobsProperties properties) {
+            RabbitTemplate rabbitTemplate, JobsProperties properties, MeterRegistry meterRegistry) {
         // Last-registered wins for a given type, so a test can substitute a handler by
         // importing a bean ordered after the real one (@Order is honored for List<T> injection).
         this.handlers = handlerList.stream()
@@ -32,6 +35,7 @@ public class JobListener {
         this.jobRecords = jobRecords;
         this.rabbitTemplate = rabbitTemplate;
         this.properties = properties;
+        this.meterRegistry = meterRegistry;
     }
 
     @RabbitListener(queues = "#{@jobQueueNames}")
@@ -41,17 +45,24 @@ public class JobListener {
         String type = message.getMessageProperties().getReceivedRoutingKey();
         String payload = new String(message.getBody());
 
-        if (jobRecords.findById(messageId).filter(r -> r.getStatus() == JobRecordStatus.SUCCEEDED).isPresent()) {
-            channel.basicAck(deliveryTag, false);
-            return;
-        }
-
+        MDC.put("jobId", messageId.toString());
+        MDC.put("jobType", type);
         try {
-            handle(messageId, type, payload);
-            channel.basicAck(deliveryTag, false);
-        } catch (Exception e) {
-            requeueOrDeadLetter(messageId, type, payload, e, message);
-            channel.basicAck(deliveryTag, false);
+            if (jobRecords.findById(messageId).filter(r -> r.getStatus() == JobRecordStatus.SUCCEEDED).isPresent()) {
+                channel.basicAck(deliveryTag, false);
+                return;
+            }
+
+            try {
+                handle(messageId, type, payload);
+                channel.basicAck(deliveryTag, false);
+            } catch (Exception e) {
+                requeueOrDeadLetter(messageId, type, payload, e, message);
+                channel.basicAck(deliveryTag, false);
+            }
+        } finally {
+            MDC.remove("jobId");
+            MDC.remove("jobType");
         }
     }
 
@@ -77,6 +88,7 @@ public class JobListener {
             record.die(attempts, errorMessage);
             jobRecords.save(record);
             rabbitTemplate.send(Amqp.DLX_EXCHANGE, type, original);
+            meterRegistry.counter("jobs.dead", "type", type).increment();
             return;
         }
 
