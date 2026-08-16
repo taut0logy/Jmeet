@@ -24,3 +24,15 @@ services:
       - '8025:8025'
     volumes:
       - ../data/dev/mailpit:/data
+  rabbitmq:
+    build: ./docker/rabbitmq
+    environment:
+      - 'RABBITMQ_DEFAULT_USER=jmeet'
+      - 'RABBITMQ_DEFAULT_PASS=secret'
+      - 'RABBITMQ_ERLANG_COOKIE=jmeetdevcookie'
+    ports:
+      - '5672:5672'
+      - '61613:61613'
+      - '15672:15672'
+    volumes:
+      - ../data/dev/rabbitmq:/var/lib/rabbitmq

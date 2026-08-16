@@ -27,6 +27,16 @@ spring:
     host: ${MAIL_HOST:localhost}
     port: ${MAIL_PORT:1025}
 
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:jmeet}
+    password: ${RABBITMQ_PASSWORD:secret}
+    listener:
+      simple:
+        acknowledge-mode: manual
+        prefetch: 1
+
   security:
     oauth2:
       client:
@@ -35,6 +45,17 @@ spring:
             client-id: ${GOOGLE_CLIENT_ID:}
             client-secret: ${GOOGLE_CLIENT_SECRET:}
             scope: openid,email,profile
+
+app:
+  jobs:
+    max-attempts: 5
+    backoff-base: 5s
+    backoff-cap: 15m
+    concurrency: 4
+  outbox:
+    poll-interval: 1s
+    batch-size: 100
+    max-attempts: 10
 
 management:
   endpoints:
@@ -57,5 +78,5 @@ spring:
 
 logging:
   level:
-    com.meet: DEBUG
+    com.taut0logy: DEBUG
     org.springframework.jdbc.core: DEBUG

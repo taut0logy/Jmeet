@@ -20,6 +20,7 @@ repositories {
 
 dependencies {
     implementation("org.springframework.boot:spring-boot-starter-actuator")
+    implementation("org.springframework.boot:spring-boot-starter-amqp")
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
     implementation("org.springframework.boot:spring-boot-starter-data-redis")
     implementation("org.springframework.boot:spring-boot-starter-flyway")
@@ -40,11 +41,15 @@ dependencies {
     implementation("org.mnode.ical4j:ical4j:4.3.0")
     implementation("org.bouncycastle:bcprov-jdk18on:1.85.2")
     implementation("org.thymeleaf.extras:thymeleaf-extras-springsecurity6")
+    implementation("com.bucket4j:bucket4j_jdk11-core:8.14.0")
+    implementation("com.bucket4j:bucket4j_jdk11-lettuce:8.14.0")
+    implementation("com.github.f4b6a3:uuid-creator:6.1.1")
     developmentOnly("org.springframework.boot:spring-boot-devtools")
     developmentOnly("org.springframework.boot:spring-boot-docker-compose")
     runtimeOnly("io.micrometer:micrometer-registry-prometheus")
     runtimeOnly("org.postgresql:postgresql")
     testImplementation("org.springframework.boot:spring-boot-starter-actuator-test")
+    testImplementation("org.springframework.boot:spring-boot-starter-amqp-test")
     testImplementation("org.springframework.boot:spring-boot-starter-data-jpa-test")
     testImplementation("org.springframework.boot:spring-boot-starter-data-redis-test")
     testImplementation("org.springframework.boot:spring-boot-starter-flyway-test")
@@ -59,6 +64,7 @@ dependencies {
     testImplementation("org.springframework.boot:spring-boot-testcontainers")
     testImplementation("org.testcontainers:testcontainers-junit-jupiter")
     testImplementation("org.testcontainers:testcontainers-postgresql")
+    testImplementation("com.redis:testcontainers-redis:2.2.4")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
