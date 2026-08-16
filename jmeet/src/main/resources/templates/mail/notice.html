@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8"/>
+  <title th:text="${title}">jmeet</title>
+</head>
+<body style="font-family: sans-serif; color: #1a1f2e; max-width: 480px; margin: 0 auto;">
+  <h1 style="font-size: 20px;" th:text="${title}">Title</h1>
+  <p th:text="${body}">Body</p>
+  <p th:if="${actionUrl != null}">
+    <a th:href="${actionUrl}" th:text="${actionLabel}"
+       style="display: inline-block; padding: 10px 20px; background: #2563eb; color: #fff; text-decoration: none; border-radius: 6px;">
+      Action
+    </a>
+  </p>
+</body>
+</html>

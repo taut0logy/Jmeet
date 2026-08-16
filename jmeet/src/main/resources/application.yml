@@ -56,6 +56,8 @@ app:
     poll-interval: 1s
     batch-size: 100
     max-attempts: 10
+  mail:
+    from: "jmeet <no-reply@jmeet.local>"
 
 management:
   endpoints:
