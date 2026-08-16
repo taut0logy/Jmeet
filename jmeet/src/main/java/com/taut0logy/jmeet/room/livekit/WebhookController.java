@@ -1,5 +1,6 @@
 package com.taut0logy.jmeet.room.livekit;
 
+import com.taut0logy.jmeet.recording.RecordingService;
 import com.taut0logy.jmeet.room.RoomService;
 import com.taut0logy.jmeet.room.RoomWebhookEvent;
 import io.livekit.server.WebhookReceiver;
@@ -20,10 +21,15 @@ class WebhookController {
 
     private final WebhookReceiver webhookReceiver;
     private final RoomService roomService;
+    private final RecordingService recordingService;
+    private final LiveKitEgressAdapter egressAdapter;
 
-    WebhookController(WebhookReceiver webhookReceiver, RoomService roomService) {
+    WebhookController(WebhookReceiver webhookReceiver, RoomService roomService, RecordingService recordingService,
+            LiveKitEgressAdapter egressAdapter) {
         this.webhookReceiver = webhookReceiver;
         this.roomService = roomService;
+        this.recordingService = recordingService;
+        this.egressAdapter = egressAdapter;
     }
 
     @PostMapping("/api/internal/livekit/webhook")
@@ -36,6 +42,11 @@ class WebhookController {
             event = webhookReceiver.receive(body, authHeader);
         } catch (RuntimeException e) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        if (event.getEvent().startsWith("egress_") && event.hasEgressInfo()) {
+            recordingService.applyEgressStatus(event.getEgressInfo().getEgressId(), egressAdapter.toSnapshot(event.getEgressInfo()));
+            return ResponseEntity.noContent().build();
         }
 
         roomService.handleWebhook(new RoomWebhookEvent(

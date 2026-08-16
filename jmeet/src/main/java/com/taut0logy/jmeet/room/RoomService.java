@@ -17,6 +17,7 @@ import com.taut0logy.jmeet.meeting.session.MeetingSession;
 import com.taut0logy.jmeet.meeting.session.MeetingSessionRepository;
 import com.taut0logy.jmeet.meeting.session.Participation;
 import com.taut0logy.jmeet.meeting.session.ParticipationRepository;
+import com.taut0logy.jmeet.recording.RecordingService;
 import com.taut0logy.jmeet.user.Profile;
 import com.taut0logy.jmeet.user.ProfileRepository;
 import java.util.List;
@@ -50,11 +51,13 @@ public class RoomService {
     private final StringRedisTemplate redis;
     private final SimpMessagingTemplate messaging;
     private final ObjectMapper json;
+    private final RecordingService recordingService;
 
     public RoomService(MeetingRepository meetings, MeetingService meetingService, MeetingSessionRepository sessions,
             ParticipationRepository participations, ChatMessageRepository chatMessages, ProfileRepository profiles,
             GuestJoinTokenService joinTokens, RoomMediaPort media, RoomProperties roomProperties,
-            StringRedisTemplate redis, SimpMessagingTemplate messaging, ObjectMapper json) {
+            StringRedisTemplate redis, SimpMessagingTemplate messaging, ObjectMapper json,
+            RecordingService recordingService) {
         this.meetings = meetings;
         this.meetingService = meetingService;
         this.sessions = sessions;
@@ -67,6 +70,7 @@ public class RoomService {
         this.redis = redis;
         this.messaging = messaging;
         this.json = json;
+        this.recordingService = recordingService;
     }
 
     @Transactional
@@ -245,6 +249,7 @@ public class RoomService {
 
         media.deleteRoom(meeting.getCode());
         participations.findBySessionIdAndLeftAtIsNull(sessionId).forEach(Participation::leave);
+        recordingService.stopActiveForSession(sessionId);
         session.end();
 
         long rev = bumpRev(sessionId);
@@ -289,6 +294,7 @@ public class RoomService {
                 .flatMap(meeting -> sessions.findByMeetingIdAndEndedAtIsNull(meeting.getId()))
                 .ifPresent(session -> {
                     participations.findBySessionIdAndLeftAtIsNull(session.getId()).forEach(Participation::leave);
+                    recordingService.stopActiveForSession(session.getId());
                     session.end();
                 });
     }

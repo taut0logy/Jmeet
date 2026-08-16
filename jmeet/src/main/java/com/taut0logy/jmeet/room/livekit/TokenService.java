@@ -7,6 +7,8 @@ import io.livekit.server.AccessToken;
 import io.livekit.server.CanPublish;
 import io.livekit.server.CanPublishData;
 import io.livekit.server.CanSubscribe;
+import io.livekit.server.Hidden;
+import io.livekit.server.Recorder;
 import io.livekit.server.RoomAdmin;
 import io.livekit.server.RoomJoin;
 import io.livekit.server.RoomName;
@@ -41,6 +43,22 @@ class TokenService {
                 new CanSubscribe(true),
                 new CanPublishData(true),
                 new RoomAdmin(admin));
+        return token.toJwt();
+    }
+
+    /** §13.4: short-lived, subscribe-only, hidden from other participants — Egress's own view
+     * into the room, not a participant. */
+    String mintRecorderToken(String roomName, String identity) {
+        AccessToken token = new AccessToken(properties.apiKey(), properties.apiSecret());
+        token.setIdentity(identity);
+        token.setTtl(TimeUnit.MINUTES.toMillis(15));
+        token.addGrants(
+                new RoomJoin(true),
+                new RoomName(roomName),
+                new CanPublish(false),
+                new CanSubscribe(true),
+                new Hidden(true),
+                new Recorder(true));
         return token.toJwt();
     }
 }

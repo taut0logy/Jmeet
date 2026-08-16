@@ -1,6 +1,7 @@
 package com.taut0logy.jmeet.room.livekit;
 
 import com.taut0logy.jmeet.config.LiveKitProperties;
+import io.livekit.server.EgressServiceClient;
 import io.livekit.server.RoomServiceClient;
 import io.livekit.server.WebhookReceiver;
 import org.springframework.context.annotation.Bean;
@@ -12,6 +13,11 @@ class LiveKitConfig {
     @Bean
     RoomServiceClient roomServiceClient(LiveKitProperties properties) {
         return RoomServiceClient.createClient(properties.host(), properties.apiKey(), properties.apiSecret());
+    }
+
+    @Bean
+    EgressServiceClient egressServiceClient(LiveKitProperties properties) {
+        return EgressServiceClient.createClient(properties.host(), properties.apiKey(), properties.apiSecret());
     }
 
     @Bean

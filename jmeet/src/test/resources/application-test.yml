@@ -41,3 +41,12 @@ app:
     chat-snapshot-limit: 50
   realtime:
     stomp-relay-port: 61613
+  recording:
+    bucket: jmeet-recordings-test
+    region: us-east-1
+    endpoint: http://localhost:9000
+    path-style: true
+    access-key: test
+    secret-key: testsecrettestsecrettestsecret
+    layout-url: http://localhost:3100/egress
+    max-duration: 2h
