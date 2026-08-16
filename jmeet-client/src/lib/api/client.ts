@@ -17,10 +17,39 @@ type RequestOptions = Omit<RequestInit, 'method' | 'body'> & {
   body?: unknown;
 };
 
+const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+
+function csrfToken(): string | undefined {
+  if (typeof document === 'undefined') return undefined;
+  return document.cookie
+    .split('; ')
+    .find((row) => row.startsWith('XSRF-TOKEN='))
+    ?.substring('XSRF-TOKEN='.length);
+}
+
+// The CSRF cookie is issued on any response, but a mutating request needs it
+// to already exist to pass the check — a fresh browser session with no prior
+// GET has nothing to send yet. Bootstrap it once rather than require every
+// page to have made a GET first.
+async function ensureCsrfToken(): Promise<string | undefined> {
+  let token = csrfToken();
+  if (!token) {
+    await fetch('/api/auth/sessions', { method: 'GET' });
+    token = csrfToken();
+  }
+  return token;
+}
+
 async function request(path: string, { method = 'GET', body, ...rest }: RequestOptions = {}) {
+  const headers: Record<string, string> = body ? { 'Content-Type': 'application/json' } : {};
+  if (!SAFE_METHODS.has(method)) {
+    const token = await ensureCsrfToken();
+    if (token) headers['X-XSRF-TOKEN'] = token;
+  }
+
   const res = await fetch(`/api${path}`, {
     method,
-    headers: body ? { 'Content-Type': 'application/json' } : undefined,
+    headers,
     body: body ? JSON.stringify(body) : undefined,
     ...rest,
   });

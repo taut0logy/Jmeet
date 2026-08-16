@@ -6,3 +6,27 @@ spring:
           google:
             client-id: test-client-id
             client-secret: test-client-secret
+
+server:
+  servlet:
+    session:
+      cookie:
+        secure: false
+
+app:
+  client:
+    base-url: http://localhost:3000
+  join-token:
+    secret: test-join-token-secret-at-least-32-bytes-long
+    ttl: 120s
+  auth:
+    session-ttl: 30d
+    # kept high so functional tests don't trip these; RateLimitIntegrationTest overrides them
+    rate-limit:
+      login: { limit: 1000, period: 1m }
+      register: { limit: 1000, period: 1m }
+      reset: { limit: 1000, period: 1m }
+      join-token: { limit: 1000, period: 1m }
+  storage:
+    driver: local
+    local-path: build/test-storage

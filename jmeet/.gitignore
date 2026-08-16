@@ -38,3 +38,4 @@ out/
 
 ### Local Dev
 src/main/resources/application-local.yml
+/storage/

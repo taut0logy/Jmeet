@@ -1,0 +1,59 @@
+package com.taut0logy.jmeet.common;
+
+import org.springframework.http.HttpStatus;
+
+public enum ErrorCode {
+    VALIDATION_ERROR(HttpStatus.BAD_REQUEST),
+    AUTH_REQUIRED(HttpStatus.UNAUTHORIZED),
+    FORBIDDEN(HttpStatus.FORBIDDEN),
+    NOT_FOUND(HttpStatus.NOT_FOUND),
+    INTERNAL(HttpStatus.INTERNAL_SERVER_ERROR),
+    RATE_LIMIT_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS),
+    CSRF_INVALID(HttpStatus.FORBIDDEN),
+    SESSION_NOT_FOUND(HttpStatus.NOT_FOUND),
+
+    MEETING_NOT_FOUND(HttpStatus.NOT_FOUND),
+    MEETING_NOT_JOINABLE(HttpStatus.CONFLICT),
+    MEETING_LOCKED(HttpStatus.LOCKED),
+    NOT_INVITED(HttpStatus.FORBIDDEN),
+    GUESTS_NOT_ALLOWED(HttpStatus.FORBIDDEN),
+    DISPLAY_NAME_REQUIRED(HttpStatus.BAD_REQUEST),
+    MEMBER_NOT_FOUND(HttpStatus.NOT_FOUND),
+    PATTERN_CHANGE_REQUIRES_SCOPE_ALL(HttpStatus.BAD_REQUEST),
+
+    JOIN_TOKEN_INVALID(HttpStatus.BAD_REQUEST),
+    JOIN_TOKEN_EXPIRED(HttpStatus.BAD_REQUEST),
+    JOIN_TOKEN_REUSED(HttpStatus.BAD_REQUEST),
+
+    ROOM_LOCKED(HttpStatus.LOCKED),
+    ROOM_FULL(HttpStatus.CONFLICT),
+    NOT_ADMITTED(HttpStatus.FORBIDDEN),
+    ALREADY_IN_MEETING(HttpStatus.CONFLICT),
+    FORBIDDEN_ROLE_ACTION(HttpStatus.FORBIDDEN),
+    SCREEN_SHARE_LIMIT_REACHED(HttpStatus.CONFLICT),
+    SCREEN_SHARE_DISABLED(HttpStatus.FORBIDDEN),
+
+    RECORDING_ALREADY_ACTIVE(HttpStatus.CONFLICT),
+    RECORDING_NOT_ACTIVE(HttpStatus.CONFLICT),
+    RECORDING_DISABLED(HttpStatus.FORBIDDEN),
+
+    FILE_TOO_LARGE(HttpStatus.CONTENT_TOO_LARGE),
+    UNSUPPORTED_MEDIA_TYPE(HttpStatus.UNSUPPORTED_MEDIA_TYPE),
+
+    EMAIL_ALREADY_REGISTERED(HttpStatus.CONFLICT),
+    EMAIL_NOT_VERIFIED(HttpStatus.FORBIDDEN),
+    INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED),
+    TOKEN_INVALID(HttpStatus.BAD_REQUEST),
+    TOKEN_EXPIRED(HttpStatus.BAD_REQUEST),
+    TOKEN_USED(HttpStatus.BAD_REQUEST);
+
+    private final HttpStatus status;
+
+    ErrorCode(HttpStatus status) {
+        this.status = status;
+    }
+
+    public HttpStatus status() {
+        return status;
+    }
+}

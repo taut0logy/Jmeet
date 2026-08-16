@@ -23,6 +23,11 @@ spring:
     redis:
       url: ${REDIS_URL:redis://localhost:6379/0}
 
+  session:
+    data:
+      redis:
+        repository-type: indexed
+
   mail:
     host: ${MAIL_HOST:localhost}
     port: ${MAIL_PORT:1025}
@@ -46,7 +51,34 @@ spring:
             client-secret: ${GOOGLE_CLIENT_SECRET:}
             scope: openid,email,profile
 
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 5MB
+
+server:
+  servlet:
+    session:
+      timeout: 30d
+      cookie:
+        name: SESSION
+        http-only: true
+        secure: true
+        same-site: lax
+
 app:
+  client:
+    base-url: ${CLIENT_BASE_URL:https://meet.example.com}
+  join-token:
+    secret: ${JOIN_TOKEN_SECRET}
+    ttl: 120s
+  auth:
+    session-ttl: 30d
+    rate-limit:
+      login: { limit: 10, period: 1m }
+      register: { limit: 5, period: 1h }
+      reset: { limit: 5, period: 1h }
+      join-token: { limit: 20, period: 1m }
   jobs:
     max-attempts: 5
     backoff-base: 5s
@@ -58,6 +90,13 @@ app:
     max-attempts: 10
   mail:
     from: "jmeet <no-reply@jmeet.local>"
+  storage:
+    driver: ${STORAGE_DRIVER:local}
+    local-path: ${STORAGE_LOCAL_PATH:storage}
+    bucket: ${S3_BUCKET:jmeet}
+    region: ${S3_REGION:us-east-1}
+    endpoint: ${S3_ENDPOINT:http://localhost:9000}
+    path-style: ${S3_PATH_STYLE:true}
 
 management:
   endpoints:
@@ -77,6 +116,12 @@ spring:
     redis:
       repositories:
         enabled: false
+
+server:
+  servlet:
+    session:
+      cookie:
+        secure: false
 
 logging:
   level:
