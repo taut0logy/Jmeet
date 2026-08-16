@@ -44,6 +44,7 @@ dependencies {
     implementation("com.bucket4j:bucket4j_jdk11-core:8.14.0")
     implementation("com.bucket4j:bucket4j_jdk11-lettuce:8.14.0")
     implementation("com.github.f4b6a3:uuid-creator:6.1.1")
+    implementation("io.projectreactor.netty:reactor-netty")
     developmentOnly("org.springframework.boot:spring-boot-devtools")
     developmentOnly("org.springframework.boot:spring-boot-docker-compose")
     runtimeOnly("io.micrometer:micrometer-registry-prometheus")

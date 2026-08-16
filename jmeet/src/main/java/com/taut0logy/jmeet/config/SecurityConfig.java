@@ -51,7 +51,10 @@ public class SecurityConfig {
                                 "/api/auth/reset-password",
                                 "/api/internal/livekit/webhook",
                                 "/api/files/**",
-                                "/api/meetings/by-code/**")
+                                "/api/meetings/by-code/**",
+                                "/api/rooms/{code}/join",
+                                "/api/rooms/{id}/sync",
+                                "/ws/**")
                         .permitAll()
                         .anyRequest().authenticated())
                 .oauth2Login(oauth2 -> oauth2.successHandler(oauth2SuccessHandler))

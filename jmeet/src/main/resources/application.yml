@@ -97,6 +97,17 @@ app:
     region: ${S3_REGION:us-east-1}
     endpoint: ${S3_ENDPOINT:http://localhost:9000}
     path-style: ${S3_PATH_STYLE:true}
+  livekit:
+    host: ${LIVEKIT_HOST:http://localhost:7880}
+    api-key: ${LIVEKIT_API_KEY:devkey}
+    api-secret: ${LIVEKIT_API_SECRET:}
+  meeting:
+    max-participants: ${MEETING_MAX_PARTICIPANTS:30}
+    single-meeting-enabled: ${MEETING_SINGLE_MEETING_ENABLED:true}
+    screen-share-max-concurrent: ${MEETING_SCREEN_SHARE_MAX_CONCURRENT:2}
+    chat-snapshot-limit: ${MEETING_CHAT_SNAPSHOT_LIMIT:50}
+  realtime:
+    stomp-relay-port: ${STOMP_RELAY_PORT:61613}
 
 management:
   endpoints:

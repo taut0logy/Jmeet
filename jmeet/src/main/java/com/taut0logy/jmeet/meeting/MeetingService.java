@@ -217,6 +217,14 @@ public class MeetingService {
         return new JoinTokenResponse(token);
     }
 
+    public Meeting requireHostOrCohost(String userId, String meetingId) {
+        return getEditable(userId, meetingId);
+    }
+
+    public Meeting requireMember(String userId, String meetingId) {
+        return getViewable(userId, meetingId);
+    }
+
     private Meeting getViewable(String userId, String meetingId) {
         Meeting meeting = meetings.findById(meetingId)
                 .orElseThrow(() -> new AppException(ErrorCode.MEETING_NOT_FOUND, "Meeting not found."));

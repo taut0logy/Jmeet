@@ -30,3 +30,14 @@ app:
   storage:
     driver: local
     local-path: build/test-storage
+  livekit:
+    host: http://localhost:7880
+    api-key: devkey
+    api-secret: devsecretdevsecretdevsecretdevsecret
+  meeting:
+    max-participants: 30
+    single-meeting-enabled: true
+    screen-share-max-concurrent: 2
+    chat-snapshot-limit: 50
+  realtime:
+    stomp-relay-port: 61613

@@ -17,6 +17,27 @@ public class TestcontainersConfiguration {
     static final String RABBITMQ_USER = "jmeet";
     static final String RABBITMQ_PASSWORD = "secret";
 
+    /** Static so its Testcontainers-assigned STOMP port is readable from a @DynamicPropertySource
+     * in another test class, which runs before the Spring context (and this @Bean) exists. */
+    private static final GenericContainer<?> RABBITMQ = new GenericContainer<>(
+            new ImageFromDockerfile().withFileFromFile(".", new File("docker/rabbitmq")))
+            .withExposedPorts(5672, 61613)
+            .withEnv("RABBITMQ_DEFAULT_USER", RABBITMQ_USER)
+            .withEnv("RABBITMQ_DEFAULT_PASS", RABBITMQ_PASSWORD)
+            .withEnv("RABBITMQ_ERLANG_COOKIE", "jmeetdevcookie");
+
+    static {
+        RABBITMQ.start();
+    }
+
+    public static String rabbitmqHost() {
+        return RABBITMQ.getHost();
+    }
+
+    public static int rabbitmqStompPort() {
+        return RABBITMQ.getMappedPort(61613);
+    }
+
     @Bean
     @ServiceConnection
     PostgreSQLContainer postgresContainer() {
@@ -31,15 +52,7 @@ public class TestcontainersConfiguration {
 
     @Bean
     GenericContainer<?> rabbitmqContainer() {
-        ImageFromDockerfile image = new ImageFromDockerfile()
-                .withFileFromFile(".", new File("docker/rabbitmq"));
-        GenericContainer<?> container = new GenericContainer<>(image)
-                .withExposedPorts(5672, 61613)
-                .withEnv("RABBITMQ_DEFAULT_USER", RABBITMQ_USER)
-                .withEnv("RABBITMQ_DEFAULT_PASS", RABBITMQ_PASSWORD)
-                .withEnv("RABBITMQ_ERLANG_COOKIE", "jmeetdevcookie");
-        container.start();
-        return container;
+        return RABBITMQ;
     }
 
     @Bean
