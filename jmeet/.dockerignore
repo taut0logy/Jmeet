@@ -1,0 +1,17 @@
+.git
+.gradle
+.idea
+.vscode
+build
+bin
+out
+*.iml
+*.log
+HELP.md
+docker
+compose.yaml
+storage
+src/main/resources/application-local.yml
+.env
+.env.*
+compose.prod.yml

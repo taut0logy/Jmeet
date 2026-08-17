@@ -296,6 +296,7 @@ public class RoomService {
 
         long rev = bumpRev(session.getId());
         broadcast(roomTopic(session.getId()), new RoomBroadcast("room-ended", rev, Map.of()));
+        clearSessionKeys(session.getId());
     }
 
     public void broadcastDurationWarning(String sessionId, Instant endsAt) {
@@ -349,6 +350,7 @@ public class RoomService {
                     participations.findBySessionIdAndLeftAtIsNull(session.getId()).forEach(Participation::leave);
                     recordingService.stopActiveForSession(session.getId());
                     session.end();
+                    clearSessionKeys(session.getId());
                 });
     }
 
@@ -515,5 +517,9 @@ public class RoomService {
 
     private String handsKey(String sessionId) {
         return "room:hands:" + sessionId;
+    }
+
+    private void clearSessionKeys(String sessionId) {
+        redis.delete(List.of(revKey(sessionId), pendingKey(sessionId), flagsKey(sessionId), handsKey(sessionId)));
     }
 }

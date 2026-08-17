@@ -39,3 +39,10 @@ out/
 ### Local Dev
 src/main/resources/application-local.yml
 /storage/
+
+### Production deploy
+.env*
+docker/livekit/livekit.prod.yaml
+docker/livekit/egress.prod.yaml
+!.env.example
+!.env.*.example
