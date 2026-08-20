@@ -1,7 +1,5 @@
-// Phase A spec §5.7. Muting uses producer.pause(), never track.enabled =
-// false, specifically so this analyser keeps reading real audio from the
-// live track while muted — that's the whole point of the "you're muted,
-// are you talking?" prompt.
+// Talking detector, uses producer.pause(), reading real audio from the
+// live track while muted, for the "you're muted, are you talking?" prompt.
 type TalkingDetectorOptions = {
   track: MediaStreamTrack | null | undefined;
   onTalking: () => void;

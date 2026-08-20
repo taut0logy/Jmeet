@@ -3,9 +3,7 @@
 import { FiUserPlus, FiUserX } from 'react-icons/fi';
 import { Button } from '@/components/ui/button';
 
-// Milestone A2 — a dedicated waiting-room queue panel (host/cohost only),
-// replacing the A1 transient inline bar (spec §4.6 decision A3: several
-// simultaneous knocks are easy to lose with toasts alone).
+// A dedicated waiting-room queue panel (host/cohost only)
 export function WaitingPanel({ waiting, onAdmit, onDeny, onAdmitAll }) {
   return (
     <div className="flex h-full flex-col">

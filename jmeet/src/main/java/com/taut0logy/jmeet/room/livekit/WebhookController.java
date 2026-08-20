@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 
-/** §11.3: authenticated by verifying the signed Authorization header; unsigned requests are
+/** Authenticated by verifying the signed Authorization header; unsigned requests are
  * rejected before parsing. */
 @RestController
 class WebhookController {

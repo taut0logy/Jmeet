@@ -11,7 +11,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import net.fortuna.ical4j.model.Recur;
 
-/** §9.3: occurrences are computed on read from the rrule; exceptions and overrides are applied on top. */
+/** occurrences are computed on read from the rrule; exceptions and overrides are applied on top. */
 public final class RecurrenceExpander {
 
     private static final int MAX_OCCURRENCES = 366;

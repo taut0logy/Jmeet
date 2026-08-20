@@ -9,7 +9,7 @@ const LAYOUTS = [
   { mode: 'sidebar', icon: FiSidebar, label: 'Sidebar' },
 ];
 
-// Milestone A2 (spec §6.4). Manual pin (video-grid.jsx) overrides the
+// Manual pin (video-grid.jsx) overrides the
 // automatic spotlight choice within 'spotlight' mode.
 export function LayoutSwitcher({ layoutMode, onChange }) {
   return (

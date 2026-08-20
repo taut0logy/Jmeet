@@ -134,7 +134,7 @@ public class AuthService {
         return user;
     }
 
-    /** §7.1: match by (provider, providerUid); else link by verified email; else create verified. */
+    /** Match by (provider, providerUid); else link by verified email; else create verified. */
     @Transactional
     public AppUser findOrCreateOAuthUser(String provider, String providerUid, String email, String name) {
         return oauthAccounts.findByProviderAndProviderUid(provider, providerUid)

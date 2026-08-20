@@ -37,13 +37,10 @@ class ReliabilityIntegrationTest {
     @Autowired
     private JobRecordRepository jobRecords;
 
-    /** §14.5/§18.2: a row already backed off from a prior failure sits in the table with a
-     * future next_attempt_at — proving it doesn't gate an unrelated, currently-due row out of
-     * the same poll() batch is the actual mechanism behind "ordering is not guaranteed... a
-     * failing row backs off instead of blocking everything behind it." */
     @Test
     void poisonedOutboxRowDoesNotDelayUnrelatedEvents() {
-        OutboxEvent poisoned = new OutboxEvent("job", "poison-agg-" + System.nanoTime(), JobType.SESSION_CLOSE.key(), "{}");
+        OutboxEvent poisoned = new OutboxEvent("job", "poison-agg-" + System.nanoTime(), JobType.SESSION_CLOSE.key(),
+                "{}");
         poisoned.scheduleRetry(Instant.now().plusSeconds(3600), "simulated prior failure");
         outboxEvents.save(poisoned);
 

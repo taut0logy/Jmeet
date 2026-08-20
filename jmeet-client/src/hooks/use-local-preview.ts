@@ -13,14 +13,14 @@ type StartOptions = { audioDeviceId?: string; videoDeviceId?: string };
 
 /**
  * Owns the local preview MediaStream for the pre-join lobby. Each getUserMedia
- * failure gets its own message (Phase B spec §8.2) rather than a generic toast.
+ * failure gets its own message rather than a generic toast.
  *
  * `initialMicEnabled`/`initialCameraEnabled` seed the toggle state from the
- * signed-in user's saved Profile.defaultMicMuted/defaultCameraOff (spec §8.2,
- * acceptance criterion #9) — since that profile fetch is async and arrives
- * after the stream has already started (starting the camera immediately is
- * better UX than waiting on a network round trip first), a change to either
- * value re-applies to the already-live tracks without restarting the stream.
+ * signed-in user's saved Profile.defaultMicMuted/defaultCameraOff, since that
+ * profile fetch is async and arrives after the stream has already started
+ * (starting the camera immediately is better UX than waiting on a network
+ * round trip first), a change to eithervalue re-applies to the already-live
+ * tracks without restarting the stream.
  */
 export function useLocalPreview({
   initialMicEnabled = true,

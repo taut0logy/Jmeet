@@ -28,8 +28,7 @@ export default function LobbyPage() {
   const [joining, setJoining] = useState(false);
   const [profile, setProfile] = useState(null);
 
-  // Seeds the toggle state from the signed-in user's saved defaults (spec
-  // §8.2, acceptance criterion #9) — defaultMicMuted/defaultCameraOff are
+  // Seeds the toggle state from the signed-in user's saved defaults, defaultMicMuted/defaultCameraOff are
   // "should start disabled" flags, so the enabled state is their inverse.
   // Before the profile loads (or for a guest), both start enabled.
   const localPreview = useLocalPreview({

@@ -19,9 +19,13 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.ObjectMapper;
 
-/** §14.6's meeting.reminder pipeline, first hop: find occurrences starting soon, dedup, and hand
- * off the per-recipient fan-out to occurrence.expand rather than doing it inline — keeps this
- * scan cheap regardless of how many members a meeting has. */
+/**
+ * Meeting.reminder pipeline, first hop: find occurrences starting soon, dedup,
+ * and hand
+ * off the per-recipient fan-out to occurrence.expand rather than doing it
+ * inline, keeps this
+ * scan cheap regardless of how many members a meeting has.
+ */
 @Component
 public class MeetingReminderScheduler {
 
@@ -35,7 +39,8 @@ public class MeetingReminderScheduler {
     private final ObjectMapper json;
     private final Clock clock;
 
-    public MeetingReminderScheduler(MeetingRepository meetings, MeetingService meetingService, RoomProperties properties,
+    public MeetingReminderScheduler(MeetingRepository meetings, MeetingService meetingService,
+            RoomProperties properties,
             StringRedisTemplate redis, OutboxService outbox, ObjectMapper json, Clock clock) {
         this.meetings = meetings;
         this.meetingService = meetingService;
@@ -53,9 +58,11 @@ public class MeetingReminderScheduler {
         Instant horizon = now.plus(properties.reminderLeadTime());
 
         for (Meeting meeting : meetings.findByKindAndStatus(MeetingKind.SCHEDULED, MeetingStatus.SCHEDULED)) {
-            if (meeting.getStartsAt() == null) continue;
+            if (meeting.getStartsAt() == null)
+                continue;
             for (OccurrenceView occurrence : meetingService.occurrencesInRange(meeting, now, horizon)) {
-                if (occurrence.status() == OccurrenceStatus.CANCELLED) continue;
+                if (occurrence.status() == OccurrenceStatus.CANCELLED)
+                    continue;
                 maybeDispatch(meeting, occurrence.startsAt());
             }
         }
@@ -64,7 +71,8 @@ public class MeetingReminderScheduler {
     private void maybeDispatch(Meeting meeting, Instant occurrenceStartsAt) {
         String key = "reminder:dispatched:" + meeting.getId() + ":" + occurrenceStartsAt.getEpochSecond();
         Boolean first = redis.opsForValue().setIfAbsent(key, "1", DEDUP_TTL);
-        if (first == null || !first) return;
+        if (first == null || !first)
+            return;
 
         OccurrenceExpandPayload payload = new OccurrenceExpandPayload(meeting.getId(), occurrenceStartsAt);
         outbox.dispatchJob(JobType.OCCURRENCE_EXPAND, meeting.getId(), json.writeValueAsString(payload));

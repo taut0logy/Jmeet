@@ -3,9 +3,9 @@ package com.taut0logy.jmeet.room;
 import com.taut0logy.jmeet.meeting.ParticipantRole;
 import java.util.List;
 
-/** Boundary rule (spec §5): only this package may import room.livekit — everything else, including
- * the rest of this package, talks to the SFU only through this port. Swapping the SFU later is a
- * one-package change. */
+/** Only this package may import room.livekit: everything else, including
+ * the rest of this package, talks to the SFU only through this port.
+ */
 public interface RoomMediaPort {
 
     String mintToken(String roomName, String identity, String displayName, ParticipantRole role, TokenMetadata metadata);

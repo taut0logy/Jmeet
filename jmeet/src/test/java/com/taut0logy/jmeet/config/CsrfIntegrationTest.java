@@ -26,9 +26,9 @@ import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.utility.DockerImageName;
 import tools.jackson.databind.ObjectMapper;
 
-/** §21 acceptance criterion 12: a mutating request without a valid CSRF token is rejected.
+/** A mutating request without a valid CSRF token is rejected.
  *
- * Two shapes of "rejected," both real: an anonymous caller gets 401, not 403 — Spring Security's
+ * Two shapes of "rejected," both real: an anonymous caller gets 401, not 403: Spring Security's
  * ExceptionTranslationFilter treats an AccessDeniedException (which is what CsrfException is) from
  * an unauthenticated caller as "needs to authenticate" and routes it through the
  * AuthenticationEntryPoint rather than the AccessDeniedHandler. An authenticated caller with a bad

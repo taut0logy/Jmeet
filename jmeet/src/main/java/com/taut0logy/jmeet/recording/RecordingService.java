@@ -42,7 +42,8 @@ public class RecordingService {
 
     private static final Logger log = LoggerFactory.getLogger(RecordingService.class);
     private static final Duration DOWNLOAD_TTL = Duration.ofMinutes(15);
-    private static final List<RecordingStatus> ACTIVE_STATUSES = List.of(RecordingStatus.RECORDING, RecordingStatus.PROCESSING);
+    private static final List<RecordingStatus> ACTIVE_STATUSES = List.of(RecordingStatus.RECORDING,
+            RecordingStatus.PROCESSING);
 
     private final RecordingRepository recordings;
     private final MeetingSessionRepository sessions;
@@ -72,7 +73,8 @@ public class RecordingService {
         this.messaging = messaging;
 
         Region region = Region.of(properties.region());
-        S3Configuration serviceConfig = S3Configuration.builder().pathStyleAccessEnabled(properties.pathStyle()).build();
+        S3Configuration serviceConfig = S3Configuration.builder().pathStyleAccessEnabled(properties.pathStyle())
+                .build();
         var presignerBuilder = S3Presigner.builder().region(region).serviceConfiguration(serviceConfig)
                 .credentialsProvider(credentialsProvider());
         if (properties.endpoint() != null && !properties.endpoint().isBlank()) {
@@ -83,7 +85,8 @@ public class RecordingService {
 
     private AwsCredentialsProvider credentialsProvider() {
         if (properties.accessKey() != null && !properties.accessKey().isBlank()) {
-            return StaticCredentialsProvider.create(AwsBasicCredentials.create(properties.accessKey(), properties.secretKey()));
+            return StaticCredentialsProvider
+                    .create(AwsBasicCredentials.create(properties.accessKey(), properties.secretKey()));
         }
         return DefaultCredentialsProvider.builder().build();
     }
@@ -97,7 +100,8 @@ public class RecordingService {
         meetingService.requireHostOrCohost(userId, meeting.getId());
 
         if (!recordings.findByMeetingIdAndStatusIn(meeting.getId(), ACTIVE_STATUSES).isEmpty()) {
-            throw new AppException(ErrorCode.RECORDING_ALREADY_ACTIVE, "A recording is already active for this meeting.");
+            throw new AppException(ErrorCode.RECORDING_ALREADY_ACTIVE,
+                    "A recording is already active for this meeting.");
         }
 
         Recording recording = new Recording(Ids.next(), meeting.getId(), sessionId, userId, "custom");
@@ -119,7 +123,8 @@ public class RecordingService {
         meetingService.requireHostOrCohost(userId, meeting.getId());
 
         Recording recording = recordings.findBySessionIdAndStatus(sessionId, RecordingStatus.RECORDING)
-                .orElseThrow(() -> new AppException(ErrorCode.RECORDING_NOT_ACTIVE, "No active recording for this room."));
+                .orElseThrow(
+                        () -> new AppException(ErrorCode.RECORDING_NOT_ACTIVE, "No active recording for this room."));
 
         egress.stopEgress(recording.getEgressId());
         recording.markProcessing();
@@ -134,24 +139,29 @@ public class RecordingService {
                 .toList();
     }
 
-    /** Stops any recording still active for this session — called when a meeting ends,
-     * regardless of whether that happened via a host action or LiveKit's own empty-timeout. */
+    /**
+     * Stops any recording still active for this session — called when a meeting
+     * ends,
+     * regardless of whether that happened via a host action or LiveKit's own
+     * empty-timeout.
+     */
     @Transactional
     public void stopActiveForSession(String sessionId) {
         recordings.findBySessionIdAndStatusIn(sessionId, ACTIVE_STATUSES).forEach(this::stopQuietly);
     }
 
-    /** §13.2 stop path 4: jmeet-web shutdown must not leave Egress recording into the void. */
+    /** Jmeet-web shutdown must not leave Egress recording into the void. */
     @PreDestroy
     @Transactional
     public void stopAllActiveOnShutdown() {
         recordings.findByStatusIn(ACTIVE_STATUSES).forEach(this::stopQuietly);
     }
 
-    /** §13.2 stop path 2: the duration cap. Called by RecordingReconciler. */
+    /** The duration cap. Called by RecordingReconciler. */
     @Transactional
     public void stopIfOverMaxDuration(Recording recording) {
-        if (recording.getStatus() != RecordingStatus.RECORDING) return;
+        if (recording.getStatus() != RecordingStatus.RECORDING)
+            return;
         if (Instant.now().isAfter(recording.getStartedAt().plus(properties.maxDuration()))) {
             stopQuietly(recording);
         }
@@ -159,11 +169,13 @@ public class RecordingService {
 
     private void stopQuietly(Recording recording) {
         try {
-            if (recording.getEgressId() != null) egress.stopEgress(recording.getEgressId());
+            if (recording.getEgressId() != null)
+                egress.stopEgress(recording.getEgressId());
             recording.markProcessing();
             broadcastRecordingState(recording.getSessionId(), false, null, null);
         } catch (Exception e) {
-            log.warn("failed to stop egress {} for recording {}: {}", recording.getEgressId(), recording.getId(), e.getMessage());
+            log.warn("failed to stop egress {} for recording {}: {}", recording.getEgressId(), recording.getId(),
+                    e.getMessage());
         }
     }
 
@@ -193,7 +205,8 @@ public class RecordingService {
                 notifyReady(recording);
             }
             case FAILED -> recording.markFailed(snapshot.error());
-            case RECORDING, PROCESSING -> recording.markRecordingOrProcessing(snapshot.status() == RecordingStatus.RECORDING);
+            case RECORDING, PROCESSING ->
+                recording.markRecordingOrProcessing(snapshot.status() == RecordingStatus.RECORDING);
         }
     }
 
@@ -205,7 +218,8 @@ public class RecordingService {
     private String downloadUrl(Recording recording) {
         GetObjectPresignRequest request = GetObjectPresignRequest.builder()
                 .signatureDuration(DOWNLOAD_TTL)
-                .getObjectRequest(GetObjectRequest.builder().bucket(properties.bucket()).key(recording.getStorageKey()).build())
+                .getObjectRequest(
+                        GetObjectRequest.builder().bucket(properties.bucket()).key(recording.getStorageKey()).build())
                 .build();
         return presigner.presignGetObject(request).url().toString();
     }

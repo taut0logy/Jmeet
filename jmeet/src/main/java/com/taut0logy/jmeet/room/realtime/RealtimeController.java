@@ -8,7 +8,7 @@ import org.springframework.messaging.handler.annotation.DestinationVariable;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.stereotype.Controller;
 
-/** §12.1: durable participant-facing events (chat, raise hand) — STOMP over the RabbitMQ relay. */
+/** Durable participant-facing events (chat, raise hand): STOMP over the RabbitMQ relay. */
 @Controller
 public class RealtimeController {
 

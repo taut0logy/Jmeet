@@ -16,7 +16,7 @@ import java.util.concurrent.TimeUnit;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.ObjectMapper;
 
-/** §11.1: the only place an AccessToken is built. */
+/** The only place an AccessToken is built. */
 @Component
 class TokenService {
 
@@ -46,7 +46,7 @@ class TokenService {
         return token.toJwt();
     }
 
-    /** §13.4: short-lived, subscribe-only, hidden from other participants — Egress's own view
+    /** Short-lived, subscribe-only, hidden from other participants, Egress's own view
      * into the room, not a participant. */
     String mintRecorderToken(String roomName, String identity) {
         AccessToken token = new AccessToken(properties.apiKey(), properties.apiSecret());

@@ -116,8 +116,7 @@ function DeviceSplitButton({
   );
 }
 
-// Milestone A2 (spec §6.4): screen share, raise hand, reactions, chat,
-// participants, layout switcher, and host-only end-for-all.
+// screen share, raise hand, reactions, chat, participants, layout switcher, and host-only end-for-all.
 export function ControlBar({
   micOn,
   camOn,

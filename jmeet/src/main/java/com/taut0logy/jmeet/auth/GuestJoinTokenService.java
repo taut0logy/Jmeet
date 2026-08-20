@@ -18,7 +18,7 @@ import java.util.Date;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
-/** §7.1: HS256 JWT, 120s TTL, single-use, carrying meetingCode/displayName/guestId. */
+/** HS256 JWT, 120s TTL, single-use, carrying meetingCode/displayName/guestId. */
 @Service
 public class GuestJoinTokenService {
 

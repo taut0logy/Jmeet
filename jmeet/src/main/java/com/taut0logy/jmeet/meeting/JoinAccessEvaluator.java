@@ -4,7 +4,7 @@ import com.taut0logy.jmeet.common.AppException;
 import com.taut0logy.jmeet.common.ErrorCode;
 import com.taut0logy.jmeet.meeting.member.MemberRole;
 
-/** §9.2: the seven-branch join access matrix, first match wins. Pure — no HTTP or database. */
+/** The seven-branch join access matrix, first match wins. o HTTP or database. */
 public final class JoinAccessEvaluator {
 
     private JoinAccessEvaluator() {
