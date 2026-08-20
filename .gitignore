@@ -2,6 +2,8 @@
 .env.*
 !.env.example
 .vscode/
-.idea/
+.idea/*
+!.idea/runConfigurations
+!.idea/inspectionProfiles
 data/
 *.log

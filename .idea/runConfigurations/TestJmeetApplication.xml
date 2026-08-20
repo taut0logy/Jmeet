@@ -1,0 +1,11 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="TestJmeetApplication" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot">
+    <option name="ACTIVE_PROFILES" value="local" />
+    <module name="jmeet.test" />
+    <option name="SPRING_BOOT_MAIN_CLASS" value="com.taut0logy.jmeet.TestJmeetApplication" />
+    <option name="WORKING_DIRECTORY" value="file://$ProjectFileDir$/jmeet" />
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>
