@@ -1,5 +1,14 @@
 # jmeet
 
+[![CI](https://github.com/taut0logy/Jmeet/actions/workflows/backend-ci-cd.yml/badge.svg)](https://github.com/taut0logy/Jmeet/actions/workflows/backend-ci-cd.yml)
+![Java](https://img.shields.io/badge/Java-25-ED8B00?logo=openjdk&logoColor=white)
+![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1-6DB33F?logo=springboot&logoColor=white)
+![Next.js](https://img.shields.io/badge/Next.js-16-000000?logo=nextdotjs&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1?logo=postgresql&logoColor=white)
+![Redis](https://img.shields.io/badge/Redis-7-DC382D?logo=redis&logoColor=white)
+![RabbitMQ](https://img.shields.io/badge/RabbitMQ-4-FF6600?logo=rabbitmq&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker&logoColor=white)
+
 A self-hosted video meeting platform: schedule or start a call, share your screen, chat, raise your hand, record the session, and manage who gets in - all running on infrastructure you control instead of a third-party SaaS.
 
 Backend is Spring Boot on Java 25. The client is Next.js. Media runs on LiveKit (WebRTC SFU), with recording handled by LiveKit Egress.
